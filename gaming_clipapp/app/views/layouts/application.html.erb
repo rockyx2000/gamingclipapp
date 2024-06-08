@@ -11,6 +11,23 @@
   </head>
 
   <body>
-    <%= yield %>
+    <div class="app">
+      <div class="header">
+        <%= link_to "Clip TV", root_path %>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <%# <ul> %>
+            <li><%= link_to "CLIPING", post_path %></li>
+            <li>HOT</li>
+            <li>CATEGORY</li>
+            <li>CHANNELS</li>
+          <%# </ul> %>
+        </div>
+        <div class="content">
+          <%= yield %>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

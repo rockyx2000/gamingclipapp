@@ -1,0 +1,115 @@
+/*
+ * This is a manifest file that'll be compiled into application.css, which will include all the files
+ * listed below.
+ *
+ * Any CSS (and SCSS, if configured) file within this directory, lib/assets/stylesheets, or any plugin's
+ * vendor/assets/stylesheets directory can be referenced here using a relative path.
+ *
+ * You're free to add application-wide styles to this file and they'll appear at the bottom of the
+ * compiled file so the styles you add here take precedence over styles defined in any other CSS
+ * files in this directory. Styles in this file should be added after the last require_* statement.
+ * It is generally better to create a new file per style scope.
+ *
+ *= require_tree .
+ *= require_self
+ */
+
+li{
+    list-style: none;
+}
+
+body{
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    /* font-size: 62.5%; */
+}
+
+.app {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    height: 48px;
+    // background-color: lightcyan;
+    // box-sizing: border-box;
+    // border: 8px solid blue;
+    //position: fixed;
+    border-bottom: 2px solid #f6f6f6;
+}
+
+.main {
+    display: flex;
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background-color: rgba(0,0,0,0);
+}
+
+::-webkit-scrollbar {
+    width: 4px;
+}
+
+::-webkit-scrollbar-track {
+    display: none;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(0,0,0,0.3);  
+}
+
+
+.sidebar {
+    //width: 100%;
+    //box-sizing: border-box;
+    //display: flex;  
+    overflow-y: scroll;
+    //position: fixed;
+    //width: 96px;
+    width: 150px;
+    // background-color: moccasin;
+    // box-sizing: border-box;
+    // border: 8px solid chocolate;
+    border-right: 2px solid #f6f6f6;
+    padding: 0px;
+    z-index: 9999;
+    li{
+        // padding: 0;
+        //list-style:none;
+        margin-bottom: 20px;
+        border: 5px;
+        height: 45px;
+        //padding: 10px 5px 10px 5px;
+    }
+    li:hover{
+        background-color: #F4F4F4;
+        border-radius:5px;
+        transform: 0.5s;
+    }
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.flex-content {
+    flex-grow: 1;
+    // background-color: palegoldenrod;
+    // box-sizing: border-box;
+    // border: 8px solid green;
+}
+
+.fixed-content {
+    height: 128px;
+    // background-color: thistle;
+    // box-sizing: border-box;
+    // border: 8px solid darkmagenta;
+}
