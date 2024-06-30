@@ -1,0 +1,8 @@
+        <%= form_with url: create_post_path, model: @new_post do |f| %>
+            <div class="form-title">
+                <%= f.text_field :title, id: "title-field" %>
+                <%= f.text_field :description, id: "desc-field" %>
+                <%= f.file_field :video, id: "file-field" %>
+                <%= f.submit "作成する"%>
+            </div>
+        <% end %>
