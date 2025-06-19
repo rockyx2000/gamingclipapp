@@ -9,6 +9,11 @@ class PostsController < ApplicationController
 
   def create_posts
     @new_post = Clip.new(post_params)
+    if @new_post.save
+      redirect_to post_path, notice: 'クリップが正常に作成されました。'
+    else
+      render :new_posts
+    end
   end
 
   private
