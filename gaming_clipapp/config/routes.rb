@@ -9,4 +9,6 @@ Rails.application.routes.draw do
   root "home#index"
 
   get "/posts" => "posts#index", as: :post
+  get "/posts/new" => "posts#new_posts", as: :new_post
+  post "/posts/create" => "posts#create_posts", as: :create_post
 end
