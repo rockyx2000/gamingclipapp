@@ -78,10 +78,12 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 ## 動画のアップロードと保存
 
 ```
-ブラウザ                              サーバー (Route Handler)
-  |  ファイル選択                           |
-  |  - <video> で長さを読み取り 60 秒以内か検証 |
-  |  - canvas で 1 秒目のフレームを JPEG 化   |
+ブラウザ (/upload の 3 フェーズ)             サーバー (Route Handler)
+  | [1] 選択: ドロップ、<video> で長さを読み取る |
+  | [2] 編集: 範囲・フィルター・テキストを決める  |
+  |     「この範囲で進む」で mediabunny が書き出す（ブラウザ内、保存なし）
+  | [3] 情報: 書き出し結果を見てタイトル等を入力  |
+  |     canvas で範囲先頭のフレームを JPEG 化    |
   |                                        |
   |-- POST /api/clips (multipart) -------->|  検証（MIME / サイズ / 長さ / ゲーム）
   |   video, thumbnail, title, gameId...   |  storage.put("<id>/video.mp4")
@@ -92,12 +94,36 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
   |-- GET /api/media/<id>/video.mp4 ------>|  storage.read()（Range 対応で 206 を返す）
 ```
 
+- **投稿画面のフェーズ (`src/app/upload/page.tsx`)**: 「選択 / 編集 / 情報」を 1 つの URL の中で
+  切り替える。ルーティングを変えないので、File・編集内容・書き出した Blob を持ち続けられる。
+  書き出しは「編集 → 情報」へ進むときに 1 度だけ実行する
+- **編集 UI (`src/components/upload/`)**: `Timeline` はフィルムストリップ上の白い枠を
+  ドラッグして範囲を決める（枠内で移動、両端で伸縮、横スクロールと拡大縮小に対応）。
+  `FilterPanel` は明るさ・コントラスト・彩度とプリセット、`AnnotationPanel` はテキストの
+  内容・色・大きさ・表示区間で、位置は `PreviewStage` 上のドラッグで決める
+- **編集値の共有 (`src/lib/video-edit.ts`)**: フィルターは CSS 文字列として、テキストは
+  canvas への描画関数として定義し、プレビューと書き出しで同じ値を使う
+- **ブラウザ内の書き出し (`src/lib/video-trim.ts`)**:
+  1 時間の動画を選んでも、元ファイルはサーバーへ送らない。mediabunny の `Conversion` に
+  `trim` を渡して範囲だけを MP4 に書き出す。入力は `BlobSource` でストリーミング読みなので
+  ファイル全体をメモリに載せず、出力（最大 1 分）だけをメモリに持つ。
+  フィルターやテキストがあるときは `process` コールバックで 1 フレームずつ canvas に描いて
+  焼き込む。加工がなく先頭からの切り出しならパケットコピーで高速。
+  出力は最大 1920px 幅に抑える。
+  WebCodecs 非対応のブラウザでは 1 分超の動画を受け付けない（`canTrimInBrowser`）。
+  Safari は `ctx.filter` が無いためフィルターの焼き込みができず、その旨を画面で伝える
+  （`canBakeFilters`）
+- **フレーム画像 (`src/lib/video-probe.ts`)**: `FrameCache` が `<video>` のシークで
+  タイムラインのフレームを作る。表示中の範囲だけを要求するので、1 時間の動画でも
+  必要な分しか生成しない
 - **ストレージ層 (`src/lib/storage.ts`)**: `ClipStorage` インターフェースと
   ローカルディスク実装。キーは `<clipId>/video.<ext>` と `<clipId>/thumb.jpg`
 - **設定 (`src/lib/config.ts`)**: `DATA_DIR`、`MAX_UPLOAD_MB` を環境変数から読む
 - **制限事項（PoC）**:
   - `request.formData()` はファイル全体をメモリに載せるため、巨大ファイルには向かない
   - 動画の長さはブラウザが読み取った値を信用している（サーバー側の ffprobe 検証は未実装）
+  - 書き出しの再エンコードはブラウザの性能に依存する。長い範囲やテキスト付きは時間がかかる
+  - フィルターとテキストは映像に焼き込むため、投稿後に外せない
   - サムネイル生成はブラウザ側なので、生成できない環境ではプレースホルダー画像になる
   - ローカルディスク保存のため、K8s では Pod を 1 つにするか RWX ボリュームが必要
 - **ダウンロード抑止**: プレイヤーは自前コントロール（`VideoPlayer`）でブラウザ標準の

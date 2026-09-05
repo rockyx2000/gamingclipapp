@@ -3,6 +3,7 @@
 YouTube のゲームクリップ版を目指す Web アプリケーション。
 
 - 1 分以内のゲームクリップを投稿・共有
+- 長い動画は投稿画面でブラウザ内で編集できる（切り出し・フィルター・テキスト。元ファイルはアップロードしない）
 - PC では YouTube 風の視聴ページ、スマホでは Shorts 風の全画面縦スワイプ視聴（同じ URL）
 - ゲームカテゴリ検索
 - ゲームごとのチームメンバー募集掲示板
@@ -21,6 +22,7 @@ YouTube のゲームクリップ版を目指す Web アプリケーション。
 | フロントエンド | Next.js 16 (App Router) / React 19 / TypeScript |
 | UI | Material UI (MUI) v9 |
 | モック API | Next.js Route Handlers + インメモリストア |
+| 動画の編集・書き出し | mediabunny（WebCodecs、ブラウザ内） |
 | 構成 | npm workspaces モノレポ |
 
 ## 必要環境
