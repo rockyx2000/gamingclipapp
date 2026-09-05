@@ -23,20 +23,19 @@ import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import HomeIcon from "@mui/icons-material/Home";
-import BoltIcon from "@mui/icons-material/Bolt";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import GroupsIcon from "@mui/icons-material/Groups";
 import SearchIcon from "@mui/icons-material/Search";
 import VideoCallIcon from "@mui/icons-material/VideoCall";
 import MenuIcon from "@mui/icons-material/Menu";
 import { useAuth } from "./AuthProvider";
-import { accentGradient } from "@/theme";
+import { Wordmark } from "./Wordmark";
+import { colors } from "@/theme";
 
 const DRAWER_WIDTH = 220;
 
 const NAV_ITEMS = [
   { label: "ホーム", href: "/", icon: <HomeIcon /> },
-  { label: "ショート", href: "/shorts", icon: <BoltIcon /> },
   { label: "ゲーム", href: "/games", icon: <SportsEsportsIcon /> },
   { label: "メンバー募集", href: "/recruits", icon: <GroupsIcon /> },
 ];
@@ -72,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             href={item.href}
             selected={pathname === item.href}
             onClick={() => setMobileOpen(false)}
-            sx={{ mx: 1, borderRadius: 2 }}
+            sx={{ mx: 1 }}
           >
             <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
             <ListItemText primary={item.label} />
@@ -81,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </List>
       <Divider sx={{ my: 1 }} />
       <Typography variant="caption" color="text.secondary" sx={{ px: 3 }}>
-        GameClips - ゲームクリップ共有
+        1分以内のゲームクリップ共有
       </Typography>
     </Box>
   );
@@ -98,22 +97,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <MenuIcon />
           </IconButton>
-          <Typography
-            variant="h6"
-            component={Link}
-            href="/"
-            sx={{
-              fontWeight: 800,
-              textDecoration: "none",
-              background: accentGradient,
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-              whiteSpace: "nowrap",
-            }}
-          >
-            GameClips
-          </Typography>
+          <Wordmark />
 
           <Box
             component="form"
@@ -125,11 +109,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               display: "flex",
               alignItems: "center",
               bgcolor: "background.paper",
-              border: 1,
-              borderColor: "divider",
-              borderRadius: 5,
-              px: 2,
-              py: 0.5,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 1,
+              px: 1.5,
+              py: 0.25,
+              "&:focus-within": { borderColor: colors.borderStrong },
             }}
           >
             <InputBase
@@ -147,8 +131,23 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             {user ? (
               <>
-                <Tooltip title="クリップをアップロード">
-                  <IconButton component={Link} href="/upload" aria-label="アップロード">
+                <Button
+                  component={Link}
+                  href="/upload"
+                  variant="contained"
+                  size="small"
+                  startIcon={<VideoCallIcon />}
+                  sx={{ display: { xs: "none", sm: "inline-flex" } }}
+                >
+                  投稿
+                </Button>
+                <Tooltip title="クリップを投稿">
+                  <IconButton
+                    component={Link}
+                    href="/upload"
+                    aria-label="クリップを投稿"
+                    sx={{ display: { sm: "none" }, color: "primary.main" }}
+                  >
                     <VideoCallIcon />
                   </IconButton>
                 </Tooltip>
@@ -174,7 +173,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 href="/login"
                 variant="outlined"
                 size="small"
-                sx={{ borderRadius: 5, whiteSpace: "nowrap" }}
+                sx={{ whiteSpace: "nowrap" }}
               >
                 ログイン
               </Button>
@@ -193,8 +192,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           "& .MuiDrawer-paper": {
             width: DRAWER_WIDTH,
             boxSizing: "border-box",
-            border: "none",
-            bgcolor: "background.default",
           },
         }}
       >

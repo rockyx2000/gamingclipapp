@@ -6,10 +6,10 @@ import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardActionArea from "@mui/material/CardActionArea";
 import CardMedia from "@mui/material/CardMedia";
-import Chip from "@mui/material/Chip";
 import Typography from "@mui/material/Typography";
 import type { ClipWithGame } from "@/lib/types";
 import { formatDuration, formatViews, timeAgo } from "@/lib/format";
+import { displaySx } from "@/theme";
 
 // ホームやゲーム詳細で使う横型（16:9）のクリップカード
 export function ClipCard({ clip }: { clip: ClipWithGame }) {
@@ -19,20 +19,25 @@ export function ClipCard({ clip }: { clip: ClipWithGame }) {
         <Box sx={{ position: "relative" }}>
           <CardMedia
             image={clip.thumbnailUrl}
-            sx={{ aspectRatio: "16 / 9", borderRadius: 3 }}
+            sx={{ aspectRatio: "16 / 9", borderRadius: 1, bgcolor: "#000" }}
           />
-          <Chip
-            label={formatDuration(clip.durationSec)}
-            size="small"
+          {/* 再生時間: 配信オーバーレイ風のコンデンス数字 */}
+          <Box
             sx={{
+              ...displaySx,
               position: "absolute",
-              bottom: 8,
-              right: 8,
-              bgcolor: "rgba(0,0,0,0.8)",
-              fontSize: 12,
-              height: 22,
+              bottom: 6,
+              right: 6,
+              px: 0.75,
+              py: 0.375,
+              fontSize: 14,
+              color: "#fff",
+              bgcolor: "rgba(0,0,0,0.85)",
+              borderRadius: 0.5,
             }}
-          />
+          >
+            {formatDuration(clip.durationSec)}
+          </Box>
         </Box>
         <Box sx={{ display: "flex", gap: 1.5, pt: 1.5, pb: 1 }}>
           <Avatar
@@ -52,11 +57,15 @@ export function ClipCard({ clip }: { clip: ClipWithGame }) {
             >
               {clip.title}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-              {clip.uploader.displayName} - {clip.game.name}
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+              {clip.uploader.displayName}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {formatViews(clip.views)} - {timeAgo(clip.createdAt)}
+              {clip.game.name}
+              {"　"}
+              {formatViews(clip.views)}
+              {"　"}
+              {timeAgo(clip.createdAt)}
             </Typography>
           </Box>
         </Box>

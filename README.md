@@ -2,14 +2,17 @@
 
 YouTube のゲームクリップ版を目指す Web アプリケーション。
 
-- 最大 2 分のゲームクリップ + 15 秒程度のショート動画
+- 1 分以内のゲームクリップを投稿・共有
+- PC では YouTube 風の視聴ページ、スマホでは Shorts 風の全画面縦スワイプ視聴（同じ URL）
 - ゲームカテゴリ検索
 - ゲームごとのチームメンバー募集掲示板
 - ログインなしでも閲覧可能（投稿にはログインが必要）
 
 現在は **バックエンドなしのフロントエンドモック** フェーズ。
-データは Next.js の Route Handlers が返すインメモリのモックデータで、
+データは Next.js の Route Handlers が返すモックデータで、募集・ログインは
 サーバーを再起動すると初期状態に戻る。
+動画のアップロードだけは実際に動作し、ファイルと投稿メタデータを `apps/web/data/`
+（環境変数 `DATA_DIR` で変更可）に保存する。
 
 ## 技術スタック
 
@@ -45,8 +48,19 @@ npm run lint    # ESLint
 
 ```bash
 docker build -f apps/web/Dockerfile -t gamingclipapp-web:dev .
-docker run --rm -p 3000:3000 gamingclipapp-web:dev
+docker run --rm -p 3000:3000 -v gamingclipapp-data:/data gamingclipapp-web:dev
 ```
+
+アップロードした動画はコンテナ内の `/data` に保存されるので、ボリュームをマウントして永続化する。
+
+## 環境変数
+
+| 変数 | 既定値 | 説明 |
+|---|---|---|
+| `DATA_DIR` | `./data`（Docker では `/data`） | 動画ファイルと `clips.json` の保存先 |
+| `MAX_UPLOAD_MB` | `200` | 動画ファイルの上限サイズ |
+
+`apps/web/.env.example` を `.env.local` にコピーして設定できる。
 
 ## ディレクトリ構成
 

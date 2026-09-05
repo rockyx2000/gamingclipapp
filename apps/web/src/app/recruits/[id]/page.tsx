@@ -9,6 +9,7 @@ import Typography from "@mui/material/Typography";
 import { getRecruit } from "@/lib/mock-db";
 import { timeAgo } from "@/lib/format";
 import { CommentSection } from "@/components/CommentSection";
+import { RecruitStatusChip } from "@/components/RecruitStatusChip";
 
 export const dynamic = "force-dynamic";
 
@@ -22,17 +23,13 @@ export default async function RecruitDetailPage(
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, md: 4 }, maxWidth: 800, mx: "auto" }}>
       <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, mb: 2 }}>
+        <RecruitStatusChip status={recruit.status} />
         <Link
           href={`/games/${recruit.game.slug}`}
           style={{ textDecoration: "none" }}
         >
-          <Chip label={recruit.game.name} color="secondary" clickable />
+          <Chip label={recruit.game.name} clickable />
         </Link>
-        {recruit.status === "closed" ? (
-          <Chip label="募集終了" />
-        ) : (
-          <Chip label="募集中" color="success" variant="outlined" />
-        )}
         {recruit.rank && <Chip label={recruit.rank} variant="outlined" />}
         {recruit.positions.map((p) => (
           <Chip key={p} label={p} size="small" variant="outlined" />

@@ -64,7 +64,6 @@ export default function LoginPage() {
           <ListItemButton
             key={user.id}
             onClick={() => handleLogin(user.username)}
-            sx={{ borderRadius: 2 }}
           >
             <ListItemAvatar>
               <Avatar src={user.avatarUrl} />

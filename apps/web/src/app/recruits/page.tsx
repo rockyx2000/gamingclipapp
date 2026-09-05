@@ -13,6 +13,14 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "メンバー募集" };
 
+// 選択中のフィルタは白地・黒文字で示す
+const selectedChipSx = {
+  bgcolor: "#f2f3f5",
+  color: "#15171b",
+  fontWeight: 700,
+  "&:hover": { bgcolor: "#fff" },
+} as const;
+
 export default async function RecruitsPage(props: PageProps<"/recruits">) {
   const searchParams = await props.searchParams;
   const gameSlug =
@@ -42,7 +50,7 @@ export default async function RecruitsPage(props: PageProps<"/recruits">) {
 
       <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, mb: 3 }}>
         <Link href="/recruits" style={{ textDecoration: "none" }}>
-          <Chip label="すべて" clickable color={!gameSlug ? "primary" : "default"} />
+          <Chip label="すべて" clickable sx={!gameSlug ? selectedChipSx : undefined} />
         </Link>
         {games.map((game) => (
           <Link
@@ -53,7 +61,7 @@ export default async function RecruitsPage(props: PageProps<"/recruits">) {
             <Chip
               label={game.name}
               clickable
-              color={gameSlug === game.slug ? "primary" : "default"}
+              sx={gameSlug === game.slug ? selectedChipSx : undefined}
             />
           </Link>
         ))}

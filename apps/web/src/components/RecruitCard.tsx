@@ -12,6 +12,8 @@ import Typography from "@mui/material/Typography";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutlined";
 import type { RecruitWithGame } from "@/lib/types";
 import { timeAgo } from "@/lib/format";
+import { displaySx } from "@/theme";
+import { RecruitStatusChip } from "./RecruitStatusChip";
 
 export function RecruitCard({ recruit }: { recruit: RecruitWithGame }) {
   const closed = recruit.status === "closed";
@@ -20,12 +22,8 @@ export function RecruitCard({ recruit }: { recruit: RecruitWithGame }) {
       <CardActionArea component={Link} href={`/recruits/${recruit.id}`}>
         <CardContent>
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
-            <Chip label={recruit.game.name} size="small" color="secondary" />
-            {closed ? (
-              <Chip label="募集終了" size="small" />
-            ) : (
-              <Chip label="募集中" size="small" color="success" variant="outlined" />
-            )}
+            <RecruitStatusChip status={recruit.status} size="small" />
+            <Chip label={recruit.game.name} size="small" />
             {recruit.rank && (
               <Chip label={recruit.rank} size="small" variant="outlined" />
             )}
@@ -53,7 +51,7 @@ export function RecruitCard({ recruit }: { recruit: RecruitWithGame }) {
             </Typography>
             <Box sx={{ flexGrow: 1 }} />
             <ChatBubbleOutlineIcon sx={{ fontSize: 16, color: "text.secondary" }} />
-            <Typography variant="caption" color="text.secondary">
+            <Typography component="span" color="text.secondary" sx={{ ...displaySx, fontSize: 16 }}>
               {recruit.comments.length}
             </Typography>
           </Stack>

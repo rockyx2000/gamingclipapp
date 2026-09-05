@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import Box from "@mui/material/Box";
+import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { getGame, listClips, listRecruits } from "@/lib/mock-db";
 import { GameTabs } from "@/components/GameTabs";
+import { displaySx } from "@/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -13,32 +15,55 @@ export default async function GameDetailPage(
   const game = getGame(slug);
   if (!game) notFound();
 
-  const clips = listClips({ gameSlug: slug, type: "clip" });
-  const shorts = listClips({ gameSlug: slug, type: "short" });
+  const clips = listClips({ gameSlug: slug });
   const recruits = listRecruits(slug);
 
   return (
     <>
-      <Box
-        sx={{
-          height: 180,
-          borderRadius: 3,
-          backgroundImage: `linear-gradient(rgba(15,15,15,0.2), rgba(15,15,15,0.95)), url(${game.coverUrl})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-end",
-          p: 3,
-          mb: 2,
-        }}
+      {/* ヒーローは飾らず、カバー画像を一枚のタイルとして置く */}
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={{ xs: 2, sm: 3 }}
+        sx={{ alignItems: { sm: "flex-end" }, mb: 3 }}
       >
-        <Typography variant="h1">{game.name}</Typography>
-        <Typography variant="body2" color="text.secondary">
-          {game.description}
-        </Typography>
-      </Box>
-      <GameTabs clips={clips} shorts={shorts} recruits={recruits} />
+        <Box
+          sx={{
+            width: { xs: "100%", sm: 240 },
+            flexShrink: 0,
+            aspectRatio: "16 / 9",
+            borderRadius: 1,
+            bgcolor: "#000",
+            backgroundImage: `url(${game.coverUrl})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        />
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h1">{game.name}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {game.description}
+          </Typography>
+          <Stack direction="row" spacing={2.5} sx={{ mt: 1.5, alignItems: "baseline" }}>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
+              <Typography component="span" sx={{ ...displaySx, fontSize: 28 }}>
+                {clips.length}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                クリップ
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
+              <Typography component="span" sx={{ ...displaySx, fontSize: 28 }}>
+                {recruits.filter((r) => r.status === "open").length}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                募集中
+              </Typography>
+            </Stack>
+          </Stack>
+        </Box>
+      </Stack>
+      <GameTabs clips={clips} recruits={recruits} />
     </>
   );
 }

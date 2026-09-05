@@ -27,6 +27,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 
+# アップロードした動画と投稿メタデータの保存先。
+# K8s では PersistentVolume を /data にマウントする（fsGroup: 1001 を推奨）
+ENV DATA_DIR=/data
+RUN mkdir -p /data && chown nextjs:nodejs /data
+VOLUME ["/data"]
+
 # standalone 出力（モノレポ構成のためリポジトリルート相当の構造になる）
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static

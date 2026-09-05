@@ -24,7 +24,7 @@ export function GameSearchBox({ initialQuery }: { initialQuery: string }) {
       component="form"
       variant="outlined"
       onSubmit={handleSubmit}
-      sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.25, borderRadius: 5 }}
+      sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.25 }}
     >
       <InputBase
         placeholder="ゲームを検索"
