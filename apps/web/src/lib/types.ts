@@ -1,7 +1,8 @@
 // ドメイン型定義
 // 将来バックエンド(apps/api)と共有する場合は packages/shared へ移動する
 
-export type ClipType = "clip" | "short";
+/** クリップの最大長（秒）。1 分以内のクリップ共有サイトという方針に合わせる */
+export const MAX_CLIP_DURATION_SEC = 60;
 
 export interface User {
   id: string;
@@ -23,11 +24,14 @@ export interface Clip {
   id: string;
   title: string;
   description: string;
-  type: ClipType;
   videoUrl: string;
   thumbnailUrl: string;
-  /** clip は最大 120 秒、short は 15 秒程度 */
+  /** 秒。MAX_CLIP_DURATION_SEC 以下 */
   durationSec: number;
+  /** アップロードされた動画の MIME タイプ（サンプル動画のシードには無い） */
+  mimeType?: string;
+  /** アップロードされた動画のファイルサイズ（バイト） */
+  sizeBytes?: number;
   gameId: string;
   uploader: User;
   views: number;

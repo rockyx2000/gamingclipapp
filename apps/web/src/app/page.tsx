@@ -1,7 +1,6 @@
 import Typography from "@mui/material/Typography";
 import { listClips } from "@/lib/mock-db";
 import { ClipGrid } from "@/components/ClipGrid";
-import { ShortsRail } from "@/components/ShortsRail";
 
 // 投稿が即時反映されるよう常に動的レンダリングにする
 export const dynamic = "force-dynamic";
@@ -22,12 +21,10 @@ export default async function HomePage(props: PageProps<"/">) {
     );
   }
 
-  const shorts = listClips({ type: "short" });
-  const clips = listClips({ type: "clip" });
+  const clips = listClips();
 
   return (
     <>
-      <ShortsRail shorts={shorts} />
       <Typography variant="h2" sx={{ mb: 2 }}>
         最新クリップ
       </Typography>

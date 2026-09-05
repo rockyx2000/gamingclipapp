@@ -2,11 +2,17 @@
 // Route Handlers とサーバーコンポーネントの両方からこの層を経由してデータへアクセスする。
 // 本物のバックエンド(apps/api)へ移行する際は、このファイルの関数実装を
 // fetch ベースの実装に差し替えるだけで済む構造にしている。
-// 注意: サーバー再起動でデータは初期状態に戻る（モックとして許容）。
+// 注意: 募集・セッションはサーバー再起動で初期状態に戻る（モックとして許容）。
+// アップロードされたクリップのメタデータだけは DATA_DIR/clips.json に永続化し、
+// 動画ファイル（ストレージ層）と整合が取れるようにしている。
+// このファイルは Node.js の API を使うため、クライアントコンポーネントから import しないこと。
 
+import { mkdirSync, readFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { CLIPS_FILE } from "./config";
 import type {
   Clip,
-  ClipType,
   ClipWithGame,
   Comment,
   Game,
@@ -115,10 +121,9 @@ const seedClips: Clip[] = [
     id: "c1",
     title: "【VALORANT】1v5クラッチ！奇跡のエース",
     description: "ラウンド残り10秒からのまさかの逆転劇。最後のジェットの動きに注目。",
-    type: "clip",
     videoUrl: `${VIDEO_BASE}/ForBiggerBlazes.mp4`,
     thumbnailUrl: "https://picsum.photos/seed/clip1/640/360",
-    durationSec: 98,
+    durationSec: 58,
     gameId: "g1",
     uploader: users[0],
     views: 15420,
@@ -129,10 +134,9 @@ const seedClips: Clip[] = [
     id: "c2",
     title: "オペレーターで4連続ヘッドショット",
     description: "アセントBサイトでの守り。リピークのタイミングが完璧に噛み合った。",
-    type: "short",
     videoUrl: `${VIDEO_BASE}/ForBiggerEscapes.mp4`,
-    thumbnailUrl: "https://picsum.photos/seed/clip2/360/640",
-    durationSec: 15,
+    thumbnailUrl: "https://picsum.photos/seed/clip2/640/360",
+    durationSec: 22,
     gameId: "g1",
     uploader: users[1],
     views: 8930,
@@ -143,10 +147,9 @@ const seedClips: Clip[] = [
     id: "c3",
     title: "【Apex】チャンピオンまでの最終ファイト全部見せます",
     description: "3部隊残りからの立ち回り。グレネードの使い方が勝負を分けた。",
-    type: "clip",
     videoUrl: `${VIDEO_BASE}/ForBiggerFun.mp4`,
     thumbnailUrl: "https://picsum.photos/seed/clip3/640/360",
-    durationSec: 115,
+    durationSec: 55,
     gameId: "g2",
     uploader: users[4],
     views: 23100,
@@ -157,10 +160,9 @@ const seedClips: Clip[] = [
     id: "c4",
     title: "パスファインダーのグラップル神回避",
     description: "崖際での攻防。この移動は読めない。",
-    type: "short",
     videoUrl: `${VIDEO_BASE}/ForBiggerJoyrides.mp4`,
-    thumbnailUrl: "https://picsum.photos/seed/clip4/360/640",
-    durationSec: 14,
+    thumbnailUrl: "https://picsum.photos/seed/clip4/640/360",
+    durationSec: 18,
     gameId: "g2",
     uploader: users[0],
     views: 5670,
@@ -171,10 +173,9 @@ const seedClips: Clip[] = [
     id: "c5",
     title: "【スプラ3】ガチエリア残り10カウントからの大逆転",
     description: "ウルトラショットで打開してからのノックアウト勝ち。",
-    type: "clip",
     videoUrl: `${VIDEO_BASE}/ForBiggerMeltdowns.mp4`,
     thumbnailUrl: "https://picsum.photos/seed/clip5/640/360",
-    durationSec: 87,
+    durationSec: 47,
     gameId: "g3",
     uploader: users[3],
     views: 12800,
@@ -185,9 +186,8 @@ const seedClips: Clip[] = [
     id: "c6",
     title: "チャージャーの超遠距離スナイプ",
     description: "マップ端から端への一撃。",
-    type: "short",
     videoUrl: `${VIDEO_BASE}/ForBiggerBlazes.mp4`,
-    thumbnailUrl: "https://picsum.photos/seed/clip6/360/640",
+    thumbnailUrl: "https://picsum.photos/seed/clip6/640/360",
     durationSec: 12,
     gameId: "g3",
     uploader: users[1],
@@ -199,10 +199,9 @@ const seedClips: Clip[] = [
     id: "c7",
     title: "【フォートナイト】ビクロイ確定の完璧な建築バトル",
     description: "最終円での1v1。ハイグラウンドの取り合いを制した。",
-    type: "clip",
     videoUrl: `${VIDEO_BASE}/ForBiggerEscapes.mp4`,
     thumbnailUrl: "https://picsum.photos/seed/clip7/640/360",
-    durationSec: 105,
+    durationSec: 60,
     gameId: "g4",
     uploader: users[3],
     views: 31200,
@@ -213,10 +212,9 @@ const seedClips: Clip[] = [
     id: "c8",
     title: "0.5秒で完成する要塞建築",
     description: "指が見えない速さ。",
-    type: "short",
     videoUrl: `${VIDEO_BASE}/ForBiggerFun.mp4`,
-    thumbnailUrl: "https://picsum.photos/seed/clip8/360/640",
-    durationSec: 13,
+    thumbnailUrl: "https://picsum.photos/seed/clip8/640/360",
+    durationSec: 9,
     gameId: "g4",
     uploader: users[3],
     views: 45600,
@@ -227,7 +225,6 @@ const seedClips: Clip[] = [
     id: "c9",
     title: "【スト6】鬼のようなパリィからのフルコンボ",
     description: "ドライブインパクトの読み合いを完全制圧。",
-    type: "clip",
     videoUrl: `${VIDEO_BASE}/ForBiggerJoyrides.mp4`,
     thumbnailUrl: "https://picsum.photos/seed/clip9/640/360",
     durationSec: 45,
@@ -241,10 +238,9 @@ const seedClips: Clip[] = [
     id: "c10",
     title: "残り1ドットからの奇跡のSA3",
     description: "これがあるから格ゲーはやめられない。",
-    type: "short",
     videoUrl: `${VIDEO_BASE}/ForBiggerMeltdowns.mp4`,
-    thumbnailUrl: "https://picsum.photos/seed/clip10/360/640",
-    durationSec: 15,
+    thumbnailUrl: "https://picsum.photos/seed/clip10/640/360",
+    durationSec: 31,
     gameId: "g5",
     uploader: users[4],
     views: 27300,
@@ -253,12 +249,11 @@ const seedClips: Clip[] = [
   },
   {
     id: "c11",
-    title: "【モンハンワイルズ】歴戦王を2分針で討伐",
+    title: "【モンハンワイルズ】歴戦王をダウンから一気に討伐",
     description: "太刀の見切り斬りが全部決まった神クエスト。",
-    type: "clip",
     videoUrl: `${VIDEO_BASE}/ForBiggerBlazes.mp4`,
     thumbnailUrl: "https://picsum.photos/seed/clip11/640/360",
-    durationSec: 119,
+    durationSec: 59,
     gameId: "g6",
     uploader: users[0],
     views: 14500,
@@ -269,9 +264,8 @@ const seedClips: Clip[] = [
     id: "c12",
     title: "大剣の真溜め斬りで空中のモンスターを撃墜",
     description: "タイミングが完璧すぎる一撃。",
-    type: "short",
     videoUrl: `${VIDEO_BASE}/ForBiggerEscapes.mp4`,
-    thumbnailUrl: "https://picsum.photos/seed/clip12/360/640",
+    thumbnailUrl: "https://picsum.photos/seed/clip12/640/360",
     durationSec: 11,
     gameId: "g6",
     uploader: users[2],
@@ -283,10 +277,9 @@ const seedClips: Clip[] = [
     id: "c13",
     title: "【LoL】バロンスティールからの逆転勝利",
     description: "スマイトの完璧なタイミング。チームの連携も見事。",
-    type: "clip",
     videoUrl: `${VIDEO_BASE}/ForBiggerFun.mp4`,
     thumbnailUrl: "https://picsum.photos/seed/clip13/640/360",
-    durationSec: 92,
+    durationSec: 52,
     gameId: "g7",
     uploader: users[2],
     views: 20100,
@@ -297,10 +290,9 @@ const seedClips: Clip[] = [
     id: "c14",
     title: "ペンタキルの瞬間",
     description: "全部持っていった。",
-    type: "short",
     videoUrl: `${VIDEO_BASE}/ForBiggerJoyrides.mp4`,
-    thumbnailUrl: "https://picsum.photos/seed/clip14/360/640",
-    durationSec: 15,
+    thumbnailUrl: "https://picsum.photos/seed/clip14/640/360",
+    durationSec: 27,
     gameId: "g7",
     uploader: users[4],
     views: 33400,
@@ -411,7 +403,10 @@ const seedRecruits: RecruitPost[] = [
 
 // HMR やルート間でストアの実体を共有するため globalThis にキャッシュする
 interface MockStore {
-  clips: Clip[];
+  /** シードデータ（コード内に定義、永続化しない） */
+  seedClips: Clip[];
+  /** ユーザーがアップロードしたクリップ（DATA_DIR/clips.json に永続化） */
+  uploadedClips: Clip[];
   recruits: RecruitPost[];
   /** sessionId -> userId */
   sessions: Map<string, string>;
@@ -419,15 +414,36 @@ interface MockStore {
 
 const globalForStore = globalThis as unknown as { __mockStore?: MockStore };
 
+function loadUploadedClips(): Clip[] {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(CLIPS_FILE, "utf8"));
+    return Array.isArray(parsed) ? (parsed as Clip[]) : [];
+  } catch {
+    // ファイルが無い（初回起動）か壊れている場合は空から始める
+    return [];
+  }
+}
+
+async function saveUploadedClips(clips: Clip[]): Promise<void> {
+  await mkdir(path.dirname(CLIPS_FILE), { recursive: true });
+  await writeFile(CLIPS_FILE, JSON.stringify(clips, null, 2), "utf8");
+}
+
 function getStore(): MockStore {
   if (!globalForStore.__mockStore) {
+    mkdirSync(path.dirname(CLIPS_FILE), { recursive: true });
     globalForStore.__mockStore = {
-      clips: [...seedClips],
+      seedClips: [...seedClips],
+      uploadedClips: loadUploadedClips(),
       recruits: seedRecruits.map((r) => ({ ...r, comments: [...r.comments] })),
       sessions: new Map(),
     };
   }
   return globalForStore.__mockStore;
+}
+
+function allClips(store: MockStore): Clip[] {
+  return [...store.seedClips, ...store.uploadedClips];
 }
 
 function byNewest(a: { createdAt: string }, b: { createdAt: string }): number {
@@ -450,7 +466,7 @@ export function listGames(query?: string): Game[] {
   const store = getStore();
   const counted = games.map((g) => ({
     ...g,
-    clipCount: store.clips.filter((c) => c.gameId === g.id).length,
+    clipCount: allClips(store).filter((c) => c.gameId === g.id).length,
   }));
   if (!query) return counted;
   const q = query.toLowerCase();
@@ -463,23 +479,22 @@ export function getGame(slug: string): Game | undefined {
   return listGames().find((g) => g.slug === slug);
 }
 
+export function getGameById(id: string): Game | undefined {
+  return listGames().find((g) => g.id === id);
+}
+
 // ---- クリップ ----
 
 export interface ClipFilter {
   gameSlug?: string;
-  type?: ClipType;
   query?: string;
 }
 
 export function listClips(filter: ClipFilter = {}): ClipWithGame[] {
-  const store = getStore();
-  let clips = [...store.clips];
+  let clips = allClips(getStore());
   if (filter.gameSlug) {
     const game = games.find((g) => g.slug === filter.gameSlug);
     clips = game ? clips.filter((c) => c.gameId === game.id) : [];
-  }
-  if (filter.type) {
-    clips = clips.filter((c) => c.type === filter.type);
   }
   if (filter.query) {
     const q = filter.query.toLowerCase();
@@ -493,38 +508,43 @@ export function listClips(filter: ClipFilter = {}): ClipWithGame[] {
 }
 
 export function getClip(id: string): ClipWithGame | undefined {
-  const clip = getStore().clips.find((c) => c.id === id);
+  const clip = allClips(getStore()).find((c) => c.id === id);
   return clip ? withGame(clip) : undefined;
 }
 
 export interface NewClipInput {
+  /** ストレージのキーと揃えるため呼び出し側で採番する */
+  id: string;
   title: string;
   description: string;
-  type: ClipType;
   gameId: string;
   durationSec: number;
+  videoUrl: string;
+  thumbnailUrl: string;
+  mimeType: string;
+  sizeBytes: number;
   uploader: User;
 }
 
-export function addClip(input: NewClipInput): ClipWithGame {
+export async function addClip(input: NewClipInput): Promise<ClipWithGame> {
   const store = getStore();
-  const isShort = input.type === "short";
   const clip: Clip = {
-    id: crypto.randomUUID(),
+    id: input.id,
     title: input.title,
     description: input.description,
-    type: input.type,
-    // モックのため、実ファイルの代わりにサンプル動画を割り当てる
-    videoUrl: `${VIDEO_BASE}/${isShort ? "ForBiggerEscapes" : "ForBiggerFun"}.mp4`,
-    thumbnailUrl: `https://picsum.photos/seed/${Date.now()}/${isShort ? "360/640" : "640/360"}`,
+    videoUrl: input.videoUrl,
+    thumbnailUrl: input.thumbnailUrl,
     durationSec: input.durationSec,
+    mimeType: input.mimeType,
+    sizeBytes: input.sizeBytes,
     gameId: input.gameId,
     uploader: input.uploader,
     views: 0,
     likes: 0,
     createdAt: new Date().toISOString(),
   };
-  store.clips.push(clip);
+  store.uploadedClips.push(clip);
+  await saveUploadedClips(store.uploadedClips);
   return withGame(clip);
 }
 
