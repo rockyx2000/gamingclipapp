@@ -27,3 +27,6 @@ npm-debug.log*
 
 # typescript
 *.tsbuildinfo
+
+# アップロードした動画とローカル永続化データ（DATA_DIR）
+data/
