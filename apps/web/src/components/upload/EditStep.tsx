@@ -15,6 +15,7 @@ import { FilterPanel } from "./FilterPanel";
 import { AnnotationPanel } from "./AnnotationPanel";
 import { PreviewStage, type PreviewStageHandle } from "./PreviewStage";
 import {
+  clampAnnotations,
   formatTimecode,
   type ClipEdit,
   type TextAnnotation,
@@ -92,7 +93,14 @@ export function EditStep({
             durationSec={durationSec}
             maxSec={maxSec}
             value={edit.trim}
-            onChange={(trim) => onChange({ ...edit, trim })}
+            onChange={(trim) =>
+              // 範囲を縮めたとき、はみ出したテキストの区間も一緒に詰める
+              onChange({
+                ...edit,
+                trim,
+                annotations: clampAnnotations(edit.annotations, trim.length),
+              })
+            }
             playhead={playhead}
             onSeek={(t) => previewRef.current?.seek(t)}
             annotations={edit.annotations}

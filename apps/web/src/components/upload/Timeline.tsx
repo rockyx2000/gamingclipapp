@@ -19,6 +19,7 @@ import { FrameCache } from "@/lib/video-probe";
 import {
   clampTrim,
   formatTimecode,
+  MIN_ANNOTATION_SEC,
   type TextAnnotation,
   type TrimSelection,
 } from "@/lib/video-edit";
@@ -45,7 +46,6 @@ const ANNOTATION_HEIGHT = 24;
 const ANNOTATION_GAP = 4;
 const FRAME_WIDTH = 96;
 const MIN_LENGTH_SEC = 1;
-const MIN_ANNOTATION_SEC = 0.3;
 
 type Drag =
   | { kind: "seek" }
@@ -78,6 +78,7 @@ export function Timeline({
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
+  const scrollFrameRef = useRef(0);
 
   const [pxPerSec, setPxPerSec] = useState(20);
   const [viewport, setViewport] = useState(0);
@@ -90,6 +91,23 @@ export function Timeline({
 
   const contentWidth = durationSec * pxPerSec;
   const trimEnd = value.start + value.length;
+
+  // スクロール位置は描画フレームごとにまとめて反映する。
+  // scrollLeft を書き換えるたびに state を更新すると、追従処理との間で往復し続けてしまう。
+  const handleScroll = useCallback(() => {
+    if (scrollFrameRef.current) return;
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = 0;
+      const next = scrollRef.current?.scrollLeft ?? 0;
+      setScrollLeft((prev) => (Math.abs(prev - next) < 1 ? prev : next));
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+    };
+  }, []);
 
   // 表示幅を追う
   useEffect(() => {
@@ -112,36 +130,51 @@ export function Timeline({
     setPxPerSec(Math.min(200, Math.max(viewport / durationSec, target)));
   }, [viewport, value.length, durationSec]);
 
-  // 表示中の範囲のフレームを要求する
+  // 表示中の範囲のフレームを要求する。
+  // 最後のタイルは動画の終端で切り、ストリップが実際の長さを超えないようにする。
   const visibleFrames = useMemo(() => {
     if (viewport === 0 || contentWidth === 0) return [];
-    const secPerFrame = FRAME_WIDTH / pxPerSec;
     const first = Math.max(0, Math.floor(scrollLeft / FRAME_WIDTH) - 1);
     const last = Math.min(
       Math.ceil(contentWidth / FRAME_WIDTH),
       Math.ceil((scrollLeft + viewport) / FRAME_WIDTH) + 1,
     );
-    const frames: { index: number; time: number }[] = [];
+    const frames: { index: number; left: number; width: number; time: number }[] = [];
     for (let i = first; i < last; i++) {
-      frames.push({ index: i, time: (i + 0.5) * secPerFrame });
+      const left = i * FRAME_WIDTH;
+      const width = Math.min(FRAME_WIDTH, contentWidth - left);
+      if (width <= 0) break;
+      frames.push({
+        index: i,
+        left,
+        width,
+        time: Math.min(durationSec, (left + width / 2) / pxPerSec),
+      });
     }
     return frames;
-  }, [scrollLeft, viewport, contentWidth, pxPerSec]);
+  }, [scrollLeft, viewport, contentWidth, pxPerSec, durationSec]);
 
   useEffect(() => {
     cache.request(visibleFrames.map((f) => f.time));
   }, [cache, visibleFrames]);
 
-  // 選択範囲が表示外へ出たら追いかける
+  // 選択範囲が表示外へ出たら追いかける。
+  // 行き先は可動域に収め、実際に動く場合だけ書き換える（書き換えの繰り返しを避けるため）。
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || viewport === 0) return;
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
     const left = value.start * pxPerSec;
     const right = trimEnd * pxPerSec;
+    let target = el.scrollLeft;
     if (left < el.scrollLeft) {
-      el.scrollLeft = Math.max(0, left - 24);
+      target = left - 24;
     } else if (right > el.scrollLeft + viewport) {
-      el.scrollLeft = right - viewport + 24;
+      target = right - viewport + 24;
+    }
+    target = Math.min(Math.max(0, target), maxScroll);
+    if (Math.abs(target - el.scrollLeft) > 1) {
+      el.scrollLeft = target;
     }
   }, [value.start, trimEnd, pxPerSec, viewport]);
 
@@ -264,7 +297,7 @@ export function Timeline({
 
       <Box
         ref={scrollRef}
-        onScroll={(e) => setScrollLeft(e.currentTarget.scrollLeft)}
+        onScroll={handleScroll}
         sx={{
           overflowX: "auto",
           overflowY: "hidden",
@@ -330,16 +363,16 @@ export function Timeline({
               bgcolor: colors.raised,
             }}
           >
-            {visibleFrames.map(({ index, time }) => {
+            {visibleFrames.map(({ index, left, width, time }) => {
               const url = cache.get(time);
               return (
                 <Box
                   key={index}
                   sx={{
                     position: "absolute",
-                    left: index * FRAME_WIDTH,
+                    left,
                     top: 0,
-                    width: FRAME_WIDTH,
+                    width,
                     height: "100%",
                     backgroundImage: url ? `url(${url})` : "none",
                     backgroundSize: "cover",

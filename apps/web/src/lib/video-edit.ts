@@ -99,6 +99,9 @@ export interface TextAnnotation {
 
 export const ANNOTATION_COLORS = ["#ffffff", "#f2b705", "#ff4d4f", "#4cc9f0", "#111111"];
 
+/** テキストを表示する最短の長さ（秒） */
+export const MIN_ANNOTATION_SEC = 0.3;
+
 export const ANNOTATION_FONT = "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif";
 
 export interface ClipEdit {
@@ -124,6 +127,28 @@ export function clampTrim(sel: TrimSelection, durationSec: number, maxSec: numbe
 /** 書き出し時に再エンコード（フレーム加工）が必要か */
 export function hasEffects(edit: ClipEdit): boolean {
   return !isDefaultFilter(edit.filters) || edit.annotations.length > 0;
+}
+
+/**
+ * テキストの表示区間をクリップの長さに収める。
+ * 切り出す範囲を縮めたとき、はみ出したテキストを終端に合わせて詰める。
+ * 変化がなければ元の配列をそのまま返す。
+ */
+export function clampAnnotations(
+  annotations: TextAnnotation[],
+  clipLength: number,
+): TextAnnotation[] {
+  let changed = false;
+  const next = annotations.map((a) => {
+    const from = a.from ?? 0;
+    const to = a.to ?? clipLength;
+    const nextTo = Math.min(to, clipLength);
+    const nextFrom = Math.min(from, Math.max(0, nextTo - MIN_ANNOTATION_SEC));
+    if (nextFrom === from && nextTo === to) return a;
+    changed = true;
+    return { ...a, from: nextFrom, to: nextTo };
+  });
+  return changed ? next : annotations;
 }
 
 /** t（クリップ内の秒）にそのテキストを表示するか */
