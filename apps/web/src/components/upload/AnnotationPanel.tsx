@@ -60,7 +60,7 @@ export function AnnotationPanel({
 
       {annotations.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
-          追加したテキストはプレビュー上でドラッグして位置を決められます。
+          追加したテキストは、プレビュー上でドラッグして位置を、タイムラインの帯で表示する区間を決められます。
         </Typography>
       ) : (
         <List dense disablePadding>
@@ -172,24 +172,9 @@ export function AnnotationPanel({
                 {formatTimecode(rangeFrom)} - {formatTimecode(rangeTo)}
               </Typography>
             </Stack>
-            <Slider
-              aria-label="表示する区間"
-              min={0}
-              max={clipLength}
-              step={0.1}
-              value={[rangeFrom, rangeTo]}
-              disableSwap
-              onChange={(_, v) => {
-                if (!Array.isArray(v)) return;
-                const [from, to] = v;
-                onChange({
-                  ...selected,
-                  from: from <= 0 ? undefined : from,
-                  to: to >= clipLength ? undefined : to,
-                });
-              }}
-              sx={sliderSx}
-            />
+            <Typography variant="caption" color="text.secondary">
+              タイムラインの帯をドラッグして動かし、両端で長さを変えられます。
+            </Typography>
           </Box>
         </Stack>
       )}

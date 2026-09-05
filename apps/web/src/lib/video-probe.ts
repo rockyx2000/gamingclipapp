@@ -79,10 +79,15 @@ function drawFrame(
 
 async function seekTo(video: HTMLVideoElement, t: number): Promise<void> {
   const clamped = Math.min(Math.max(0, t), Math.max(0, video.duration - 0.05));
-  if (Math.abs(video.currentTime - clamped) < 0.001 && video.readyState >= 2) return;
-  const seeked = waitForEvent(video, "seeked");
-  video.currentTime = clamped;
-  await seeked;
+  if (Math.abs(video.currentTime - clamped) >= 0.001 || video.readyState < 2) {
+    const seeked = waitForEvent(video, "seeked");
+    video.currentTime = clamped;
+    await seeked;
+  }
+  // seeked の時点でまだフレームを描けないことがあるので、描画可能になるまで待つ
+  if (video.readyState < 2) {
+    await waitForEvent(video, "loadeddata");
+  }
 }
 
 /** サムネイル用に 1 フレームだけ切り出す */
@@ -159,29 +164,35 @@ export class FrameCache {
   private async pump(): Promise<void> {
     if (this.running) return;
     this.running = true;
-    const element = this.ensureElement();
-    await element.ready;
-    while (this.queue.length > 0 && this.element === element) {
-      const key = this.queue.pop()!;
-      this.queued.delete(key);
-      try {
-        const { video } = element;
-        await seekTo(video, key / 1000);
-        if (this.element !== element) break;
-        const width = Math.round(
-          (this.frameHeight * video.videoWidth) / Math.max(1, video.videoHeight),
-        );
-        const blob = await drawFrame(video, width, "image/webp", 0.7);
-        if (this.element !== element) break;
-        if (blob) {
-          this.urls.set(key, URL.createObjectURL(blob));
-          this.listeners.forEach((l) => l());
+    try {
+      // dispose されても、残っているキューは新しい <video> 要素で処理し直す
+      while (this.queue.length > 0) {
+        const element = this.ensureElement();
+        await element.ready;
+        while (this.queue.length > 0 && this.element === element) {
+          const key = this.queue.pop()!;
+          this.queued.delete(key);
+          try {
+            const { video } = element;
+            await seekTo(video, key / 1000);
+            if (this.element !== element) break;
+            const width = Math.round(
+              (this.frameHeight * video.videoWidth) / Math.max(1, video.videoHeight),
+            );
+            const blob = await drawFrame(video, width, "image/webp", 0.7);
+            if (this.element !== element) break;
+            if (blob) {
+              this.urls.set(key, URL.createObjectURL(blob));
+              this.listeners.forEach((l) => l());
+            }
+          } catch {
+            // このフレームは諦めて次へ
+          }
         }
-      } catch {
-        // このフレームは諦めて次へ
       }
+    } finally {
+      this.running = false;
     }
-    this.running = false;
   }
 
   /** 画像と <video> 要素を解放する。以後また request されれば作り直す */

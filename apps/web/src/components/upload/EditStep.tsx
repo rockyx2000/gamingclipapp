@@ -30,7 +30,10 @@ interface Props {
   onChange: (next: ClipEdit) => void;
 }
 
-function createAnnotation(): TextAnnotation {
+// 追加位置は再生ヘッドから。区間はクリップに収まる範囲で 3 秒
+function createAnnotation(at: number, clipLength: number): TextAnnotation {
+  const span = Math.min(3, clipLength);
+  const from = Math.min(Math.max(0, at), Math.max(0, clipLength - span));
   return {
     id: crypto.randomUUID(),
     text: "ナイスプレイ",
@@ -39,6 +42,8 @@ function createAnnotation(): TextAnnotation {
     size: 0.08,
     color: "#ffffff",
     background: false,
+    from,
+    to: from + span,
   };
 }
 
@@ -90,6 +95,10 @@ export function EditStep({
             onChange={(trim) => onChange({ ...edit, trim })}
             playhead={playhead}
             onSeek={(t) => previewRef.current?.seek(t)}
+            annotations={edit.annotations}
+            selectedAnnotationId={selectedId}
+            onSelectAnnotation={setSelectedId}
+            onChangeAnnotation={updateAnnotation}
           />
         </Stack>
       </Grid>
@@ -106,7 +115,8 @@ export function EditStep({
             <Stack spacing={1.5}>
               <Typography variant="body2" color="text.secondary">
                 タイムラインの白い枠が投稿する範囲です。枠の中をドラッグすると範囲ごと動き、
-                左右のつまみで長さを変えられます。拡大すると細かく合わせられます。
+                左右のつまみで長さを変えられます。上の目盛りをドラッグすると再生位置が動きます。
+                拡大すると細かく合わせられます。
               </Typography>
               <Box>
                 <Typography variant="caption" color="text.secondary">
@@ -132,7 +142,7 @@ export function EditStep({
               clipLength={edit.trim.length}
               onSelect={setSelectedId}
               onAdd={() => {
-                const created = createAnnotation();
+                const created = createAnnotation(playhead - edit.trim.start, edit.trim.length);
                 onChange({ ...edit, annotations: [...edit.annotations, created] });
                 setSelectedId(created.id);
               }}
