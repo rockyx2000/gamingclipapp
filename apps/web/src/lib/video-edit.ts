@@ -104,10 +104,41 @@ export const MIN_ANNOTATION_SEC = 0.3;
 
 export const ANNOTATION_FONT = "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif";
 
+/**
+ * 追加した BGM。
+ * file はブラウザ上でだけ使う（サーバーへは送らず、書き出した動画に混ぜ込む）。
+ * from / to / offset はすべて秒で、from と to はクリップ内の位置を指す。
+ */
+export interface BgmTrack {
+  file: File;
+  name: string;
+  /** 音源全体の長さ（秒） */
+  durationSec: number;
+  /** クリップ内で鳴らし始める位置 */
+  from: number;
+  /** クリップ内で鳴らし終える位置 */
+  to: number;
+  /** 音源のどこから鳴らすか */
+  offset: number;
+  /** 0〜1 */
+  volume: number;
+  /** 区間が音源より長いとき繰り返すか */
+  loop: boolean;
+}
+
+/** BGM を鳴らす最短の長さ（秒） */
+export const MIN_BGM_SEC = 0.5;
+
+/** BGM の終わりをなめらかに消す長さ（秒） */
+export const BGM_FADE_SEC = 0.4;
+
 export interface ClipEdit {
   trim: TrimSelection;
   filters: FilterSettings;
   annotations: TextAnnotation[];
+  /** 元動画の音量（0〜1）。BGM だけにしたいときは 0 にする */
+  originalVolume: number;
+  bgm: BgmTrack | null;
 }
 
 export function createDefaultEdit(durationSec: number, maxSec: number): ClipEdit {
@@ -115,7 +146,41 @@ export function createDefaultEdit(durationSec: number, maxSec: number): ClipEdit
     trim: { start: 0, length: Math.min(maxSec, durationSec) },
     filters: DEFAULT_FILTERS,
     annotations: [],
+    originalVolume: 1,
+    bgm: null,
   };
+}
+
+/** 選んだ音源を、クリップの頭から鳴らす既定値で組み立てる */
+export function createBgm(file: File, durationSec: number, clipLength: number): BgmTrack {
+  return {
+    file,
+    name: file.name,
+    durationSec,
+    from: 0,
+    to: Math.min(clipLength, Math.max(MIN_BGM_SEC, durationSec)),
+    offset: 0,
+    volume: 0.5,
+    loop: false,
+  };
+}
+
+/**
+ * BGM の区間をクリップの長さに収める。
+ * 切り出す範囲を縮めたとき、はみ出した BGM を終端に合わせて詰める。
+ * 変化がなければ元の値をそのまま返す。
+ */
+export function clampBgm(bgm: BgmTrack | null, clipLength: number): BgmTrack | null {
+  if (!bgm) return null;
+  const to = Math.min(bgm.to, clipLength);
+  const from = Math.min(bgm.from, Math.max(0, to - MIN_BGM_SEC));
+  if (from === bgm.from && to === bgm.to) return bgm;
+  return { ...bgm, from, to };
+}
+
+/** 書き出し時に音声を作り直す必要があるか（BGM を混ぜる / 元の音量を変える） */
+export function hasCustomAudio(edit: ClipEdit): boolean {
+  return edit.bgm !== null || edit.originalVolume !== 1;
 }
 
 export function clampTrim(sel: TrimSelection, durationSec: number, maxSec: number): TrimSelection {

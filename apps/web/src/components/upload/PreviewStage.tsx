@@ -2,8 +2,11 @@
 
 // 編集中のプレビュー。動画に CSS フィルターを掛け、テキストを DOM で重ねる。
 // テキストはドラッグで位置を変えられる。再生は選択範囲内をループする。
+// BGM を追加している場合は、隠した <audio> を動画の再生位置に合わせて鳴らす
+// （書き出したときと同じ聞こえ方を確かめられるようにするため）。
 
 import {
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -27,6 +30,7 @@ import {
   cssFilter,
   formatTimecode,
   isAnnotationVisible,
+  type BgmTrack,
   type FilterSettings,
   type TextAnnotation,
   type TrimSelection,
@@ -46,6 +50,11 @@ interface Props {
   trim: TrimSelection;
   filters: FilterSettings;
   annotations: TextAnnotation[];
+  /** 元動画の音量（0〜1）。プレビューの音量と掛け合わせる */
+  originalVolume: number;
+  bgm: BgmTrack | null;
+  /** BGM の再生用 URL。bgm があるときだけ渡される */
+  bgmUrl: string | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onMoveAnnotation: (id: string, x: number, y: number) => void;
@@ -86,12 +95,16 @@ export function PreviewStage({
   trim,
   filters,
   annotations,
+  originalVolume,
+  bgm,
+  bgmUrl,
   selectedId,
   onSelect,
   onMoveAnnotation,
   onTimeChange,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const bgmRef = useRef<HTMLAudioElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(DEFAULT_VOLUME);
@@ -120,13 +133,22 @@ export function PreviewStage({
     setMuted(stored === 0);
   }, []);
 
-  // 音量を video 要素へ反映する
+  // 音量を video / audio 要素へ反映する。
+  // プレビューの音量を全体の大きさ、編集中の音量をその中での比率として掛ける。
+  const silent = muted || volume === 0;
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
-    video.volume = volume;
-    video.muted = muted || volume === 0;
-  }, [volume, muted]);
+    if (video) {
+      video.volume = Math.min(1, Math.max(0, volume * originalVolume));
+      video.muted = silent || originalVolume === 0;
+    }
+    const audio = bgmRef.current;
+    if (audio) {
+      const level = bgm ? bgm.volume : 0;
+      audio.volume = Math.min(1, Math.max(0, volume * level));
+      audio.muted = silent || level === 0;
+    }
+  }, [volume, silent, originalVolume, bgm]);
 
   // 文字サイズを動画の高さに対する割合で決めるため、表示サイズを追う
   useEffect(() => {
@@ -148,6 +170,45 @@ export function PreviewStage({
       video.currentTime = trim.start;
     }
   }, [trim.start, end]);
+
+  /**
+   * BGM を動画の再生位置に合わせる。
+   * ずれが 0.3 秒を超えたときだけ currentTime を書き換え、常時の書き換えで音が途切れるのを防ぐ。
+   */
+  const syncBgm = useCallback(() => {
+    const video = videoRef.current;
+    const audio = bgmRef.current;
+    if (!audio) return;
+    if (!video || !bgm) {
+      audio.pause();
+      return;
+    }
+    const rel = video.currentTime - trim.start;
+    if (rel < bgm.from || rel >= bgm.to) {
+      if (!audio.paused) audio.pause();
+      return;
+    }
+    const into = rel - bgm.from;
+    const tail = Math.max(0.1, bgm.durationSec - bgm.offset);
+    const target = bgm.loop ? bgm.offset + (into % tail) : bgm.offset + into;
+    if (target >= bgm.durationSec) {
+      if (!audio.paused) audio.pause();
+      return;
+    }
+    if (Math.abs(audio.currentTime - target) > 0.3) {
+      audio.currentTime = target;
+    }
+    if (video.paused) {
+      if (!audio.paused) audio.pause();
+    } else if (audio.paused) {
+      audio.play().catch(() => {});
+    }
+  }, [bgm, trim.start]);
+
+  // 音源や区間を変えたら、その場で聞こえ方を合わせ直す
+  useEffect(() => {
+    syncBgm();
+  }, [syncBgm]);
 
   const reportTime = (t: number) => {
     setTime(t);
@@ -174,6 +235,7 @@ export function PreviewStage({
       video.currentTime = trim.start;
     }
     reportTime(video.currentTime);
+    syncBgm();
   };
 
   const changeVolume = (next: number) => {
@@ -222,7 +284,6 @@ export function PreviewStage({
   };
 
   const relTime = time - trim.start;
-  const silent = muted || volume === 0;
   const VolumeIcon = silent ? VolumeOffIcon : volume < 0.5 ? VolumeDownIcon : VolumeUpIcon;
 
   return (
@@ -254,8 +315,14 @@ export function PreviewStage({
             const video = videoRef.current;
             if (video) video.currentTime = trim.start;
           }}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
+          onPlay={() => {
+            setPlaying(true);
+            syncBgm();
+          }}
+          onPause={() => {
+            setPlaying(false);
+            bgmRef.current?.pause();
+          }}
           onSeeked={handleTimeUpdate}
           onTimeUpdate={handleTimeUpdate}
           onClick={(e: ReactMouseEvent) => {
@@ -272,6 +339,17 @@ export function PreviewStage({
             cursor: "pointer",
           }}
         />
+
+        {/* BGM。表示はせず、動画の再生位置に合わせて鳴らす */}
+        {bgmUrl && (
+          <Box
+            component="audio"
+            ref={bgmRef}
+            src={bgmUrl}
+            preload="auto"
+            sx={{ display: "none" }}
+          />
+        )}
 
         {/* テキストの重ね書き */}
         {annotations

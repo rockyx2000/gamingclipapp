@@ -2,7 +2,12 @@ import { NextRequest } from "next/server";
 import { addClip, getGameById, listClips } from "@/lib/mock-db";
 import { getCurrentUser } from "@/lib/auth";
 import { getStorage } from "@/lib/storage";
-import { MAX_UPLOAD_BYTES, VIDEO_EXTENSIONS } from "@/lib/config";
+import {
+  IMAGE_EXTENSIONS,
+  MAX_THUMBNAIL_BYTES,
+  MAX_UPLOAD_BYTES,
+  VIDEO_EXTENSIONS,
+} from "@/lib/config";
 import { MAX_CLIP_DURATION_SEC } from "@/lib/types";
 
 // GET /api/clips?game=<slug>&q=<検索語>
@@ -22,7 +27,7 @@ function badRequest(message: string, status = 400): Response {
 // POST /api/clips  クリップ投稿（要ログイン）
 // multipart/form-data で受け取る:
 //   video       動画ファイル（必須。mp4 / webm / mov、MAX_UPLOAD_MB 以下）
-//   thumbnail   サムネイル画像（任意。ブラウザ側で動画から生成した JPEG）
+//   thumbnail   サムネイル画像（任意。動画から切り出した JPEG、または投稿者が選んだ画像）
 //   title, description, gameId, durationSec
 // 注意: request.formData() はファイル全体をメモリに読み込む。本番では署名付き URL で
 // オブジェクトストレージへ直接アップロードする方式に切り替える（docs/architecture.md）。
@@ -72,24 +77,34 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // サムネイルは任意。指定が無ければプレースホルダー画像を使う
+  let thumbExt: string | null = null;
+  if (thumbnail instanceof File && thumbnail.size > 0) {
+    thumbExt = IMAGE_EXTENSIONS[thumbnail.type] ?? null;
+    if (!thumbExt) {
+      return badRequest("サムネイルは JPEG / PNG / WebP の画像を選んでください");
+    }
+    if (thumbnail.size > MAX_THUMBNAIL_BYTES) {
+      return badRequest(
+        `サムネイルは${Math.floor(MAX_THUMBNAIL_BYTES / 1024 / 1024)}MB以下にしてください`,
+        413,
+      );
+    }
+  }
+
   const storage = getStorage();
   const id = crypto.randomUUID();
   const videoKey = `${id}/video${ext}`;
-  const thumbKey = `${id}/thumb.jpg`;
 
   try {
     await storage.put(videoKey, video.stream());
 
     let thumbnailUrl: string;
-    if (
-      thumbnail instanceof File &&
-      thumbnail.size > 0 &&
-      thumbnail.type === "image/jpeg"
-    ) {
+    if (thumbnail instanceof File && thumbExt) {
+      const thumbKey = `${id}/thumb${thumbExt}`;
       await storage.put(thumbKey, thumbnail.stream());
       thumbnailUrl = storage.publicUrl(thumbKey);
     } else {
-      // サムネイルを生成できなかった場合はプレースホルダー画像を使う
       thumbnailUrl = `https://picsum.photos/seed/${id}/640/360`;
     }
 

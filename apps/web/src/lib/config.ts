@@ -26,6 +26,17 @@ export const VIDEO_EXTENSIONS: Record<string, string> = {
   "video/quicktime": ".mov",
 };
 
+/** 受け付けるサムネイル画像の MIME タイプと保存時の拡張子 */
+export const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+};
+
+/** アップロードできるサムネイル画像の上限サイズ（バイト） */
+export const MAX_THUMBNAIL_BYTES =
+  (Number(process.env.MAX_THUMBNAIL_MB) || 10) * 1024 * 1024;
+
 /** 配信時に拡張子から決める Content-Type */
 export const CONTENT_TYPES: Record<string, string> = {
   ".mp4": "video/mp4",
