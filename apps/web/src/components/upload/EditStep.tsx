@@ -1,8 +1,9 @@
 "use client";
 
-// 編集フェーズ。プレビュー + タイムライン + 右側のタブ（範囲 / フィルター / テキスト）。
+// 編集フェーズ。プレビュー + タイムライン + 右側のタブ（範囲 / フィルター / テキスト / 音声）。
 
 import { useRef, useState } from "react";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
 import Paper from "@mui/material/Paper";
@@ -13,12 +14,16 @@ import Typography from "@mui/material/Typography";
 import { Timeline } from "./Timeline";
 import { FilterPanel } from "./FilterPanel";
 import { AnnotationPanel } from "./AnnotationPanel";
+import { AudioPanel } from "./AudioPanel";
 import { PreviewStage, type PreviewStageHandle } from "./PreviewStage";
 import {
   clampAnnotations,
+  clampBgm,
   formatTimecode,
+  type BgmTrack,
   type ClipEdit,
   type TextAnnotation,
+  type TrimSelection,
 } from "@/lib/video-edit";
 
 interface Props {
@@ -29,7 +34,15 @@ interface Props {
   maxSec: number;
   edit: ClipEdit;
   onChange: (next: ClipEdit) => void;
+  /** 追加した BGM の再生用 URL（プレビューで鳴らす） */
+  bgmUrl: string | null;
+  bgmError: string | null;
+  audioSupported: boolean;
+  onPickBgm: (file: File) => void;
+  onRemoveBgm: () => void;
 }
+
+const TAB_AUDIO = 3;
 
 // 追加位置は再生ヘッドから。区間はクリップに収まる範囲で 3 秒
 function createAnnotation(at: number, clipLength: number): TextAnnotation {
@@ -56,6 +69,11 @@ export function EditStep({
   maxSec,
   edit,
   onChange,
+  bgmUrl,
+  bgmError,
+  audioSupported,
+  onPickBgm,
+  onRemoveBgm,
 }: Props) {
   const previewRef = useRef<PreviewStageHandle>(null);
   const [tab, setTab] = useState(0);
@@ -69,6 +87,32 @@ export function EditStep({
     });
   };
 
+  const updateBgm = (next: BgmTrack) => {
+    onChange({ ...edit, bgm: next });
+  };
+
+  // 範囲を縮めたとき、はみ出したテキストと BGM の区間も一緒に詰める
+  const updateTrim = (trim: TrimSelection) => {
+    onChange({
+      ...edit,
+      trim,
+      annotations: clampAnnotations(edit.annotations, trim.length),
+      bgm: clampBgm(edit.bgm, trim.length),
+    });
+  };
+
+  const addAnnotation = () => {
+    const created = createAnnotation(playhead - edit.trim.start, edit.trim.length);
+    onChange({ ...edit, annotations: [...edit.annotations, created] });
+    setSelectedId(created.id);
+    setTab(2);
+  };
+
+  const pickBgm = (picked: File) => {
+    onPickBgm(picked);
+    setTab(TAB_AUDIO);
+  };
+
   return (
     <Grid container spacing={3}>
       <Grid size={{ xs: 12, md: 7 }}>
@@ -80,6 +124,9 @@ export function EditStep({
             trim={edit.trim}
             filters={edit.filters}
             annotations={edit.annotations}
+            originalVolume={edit.originalVolume}
+            bgm={edit.bgm}
+            bgmUrl={bgmUrl}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onMoveAnnotation={(id, x, y) => {
@@ -93,31 +140,43 @@ export function EditStep({
             durationSec={durationSec}
             maxSec={maxSec}
             value={edit.trim}
-            onChange={(trim) =>
-              // 範囲を縮めたとき、はみ出したテキストの区間も一緒に詰める
-              onChange({
-                ...edit,
-                trim,
-                annotations: clampAnnotations(edit.annotations, trim.length),
-              })
-            }
+            onChange={updateTrim}
             playhead={playhead}
             onSeek={(t) => previewRef.current?.seek(t)}
             annotations={edit.annotations}
             selectedAnnotationId={selectedId}
             onSelectAnnotation={setSelectedId}
             onChangeAnnotation={updateAnnotation}
+            onAddAnnotation={addAnnotation}
+            bgm={edit.bgm}
+            onPickBgm={pickBgm}
+            onChangeBgm={updateBgm}
+            onFocusBgm={() => setTab(TAB_AUDIO)}
+            audioDisabled={!audioSupported}
           />
         </Stack>
       </Grid>
 
       <Grid size={{ xs: 12, md: 5 }}>
         <Paper variant="outlined" sx={{ p: 2 }}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            variant="scrollable"
+            scrollButtons={false}
+            sx={{ mb: 2 }}
+          >
             <Tab label="範囲" />
             <Tab label="フィルター" />
             <Tab label={`テキスト${edit.annotations.length > 0 ? ` (${edit.annotations.length})` : ""}`} />
+            <Tab label={edit.bgm ? "音声 (1)" : "音声"} />
           </Tabs>
+
+          {bgmError && tab === TAB_AUDIO && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {bgmError}
+            </Alert>
+          )}
 
           {tab === 0 && (
             <Stack spacing={1.5}>
@@ -149,11 +208,7 @@ export function EditStep({
               selectedId={selectedId}
               clipLength={edit.trim.length}
               onSelect={setSelectedId}
-              onAdd={() => {
-                const created = createAnnotation(playhead - edit.trim.start, edit.trim.length);
-                onChange({ ...edit, annotations: [...edit.annotations, created] });
-                setSelectedId(created.id);
-              }}
+              onAdd={addAnnotation}
               onChange={updateAnnotation}
               onRemove={(id) => {
                 onChange({
@@ -162,6 +217,19 @@ export function EditStep({
                 });
                 if (selectedId === id) setSelectedId(null);
               }}
+            />
+          )}
+
+          {tab === TAB_AUDIO && (
+            <AudioPanel
+              bgm={edit.bgm}
+              originalVolume={edit.originalVolume}
+              clipLength={edit.trim.length}
+              disabled={!audioSupported}
+              onPick={onPickBgm}
+              onChangeBgm={updateBgm}
+              onRemoveBgm={onRemoveBgm}
+              onChangeOriginalVolume={(originalVolume) => onChange({ ...edit, originalVolume })}
             />
           )}
         </Paper>
