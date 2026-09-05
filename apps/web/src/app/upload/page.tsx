@@ -1,81 +1,63 @@
 "use client";
 
-// クリップのアップロードフォーム
-// - 選択した動画のメタデータから長さを読み取り、60 秒以内かをブラウザ側で検証する
-// - 1 秒目のフレームを canvas で JPEG 化してサムネイルとして一緒に送る
-// - XMLHttpRequest で送信し、アップロード進捗を表示する（fetch は進捗を取れない）
+// クリップの投稿画面。1 つの URL の中でフェーズを切り替える（画面遷移しない）。
+//   1. 選択 : 動画をドロップ / 選択する
+//   2. 編集 : 投稿する範囲・フィルター・テキストを決める
+//   3. 情報 : 書き出した結果を見ながらタイトルなどを入力して投稿する
+// 遷移でファイルや編集状態を失わないよう、状態はこのコンポーネントが持ち続ける。
+// 書き出しは「編集 → 情報」へ進むときに 1 度だけ行い、結果の Blob を保持する。
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import LinearProgress from "@mui/material/LinearProgress";
-import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
+import Step from "@mui/material/Step";
+import StepLabel from "@mui/material/StepLabel";
+import Stepper from "@mui/material/Stepper";
 import Typography from "@mui/material/Typography";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useAuth } from "@/components/AuthProvider";
+import { FileDropzone } from "@/components/upload/FileDropzone";
+import { EditStep } from "@/components/upload/EditStep";
+import { DetailsStep, type ClipDetails } from "@/components/upload/DetailsStep";
 import { MAX_CLIP_DURATION_SEC, type Game } from "@/lib/types";
-import { formatDuration } from "@/lib/format";
+import {
+  createDefaultEdit,
+  hasEffects,
+  type ClipEdit,
+} from "@/lib/video-edit";
+import { captureThumbnail, readVideoMeta, type VideoMeta } from "@/lib/video-probe";
+import { canBakeFilters, canTrimInBrowser, exportClip } from "@/lib/video-trim";
 
 const ACCEPTED_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
-const THUMBNAIL_WIDTH = 640;
+const STEPS = ["動画を選ぶ", "編集する", "投稿する"];
 
-interface ProbeResult {
-  durationSec: number;
+type Phase =
+  | { kind: "idle" }
+  | { kind: "reading" }
+  | { kind: "exporting"; progress: number }
+  | { kind: "uploading"; progress: number }
+  | { kind: "saving" };
+
+interface SourceVideo {
+  file: File;
+  meta: VideoMeta;
+  previewUrl: string;
+}
+
+interface ExportedClip {
+  blob: Blob;
+  previewUrl: string;
   thumbnail: Blob | null;
+  thumbnailUrl: string | null;
+  lengthSec: number;
 }
 
-// 動画ファイルから長さとサムネイルを取り出す
-function probeVideo(file: File): Promise<ProbeResult> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const video = document.createElement("video");
-    video.preload = "auto";
-    video.muted = true;
-    video.playsInline = true;
-
-    const cleanup = () => {
-      URL.revokeObjectURL(url);
-      video.removeAttribute("src");
-      video.load();
-    };
-    const finish = (thumbnail: Blob | null) => {
-      const durationSec = Math.round(video.duration);
-      cleanup();
-      resolve({ durationSec, thumbnail });
-    };
-
-    video.onerror = () => {
-      cleanup();
-      reject(new Error("動画を読み込めませんでした"));
-    };
-    video.onloadedmetadata = () => {
-      // 1 秒目（短い動画なら中間）へシークしてフレームを取り出す
-      video.currentTime = Math.min(1, video.duration / 2);
-    };
-    video.onseeked = () => {
-      try {
-        const scale = Math.min(1, THUMBNAIL_WIDTH / video.videoWidth);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(video.videoWidth * scale);
-        canvas.height = Math.round(video.videoHeight * scale);
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return finish(null);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => finish(blob), "image/jpeg", 0.85);
-      } catch {
-        finish(null);
-      }
-    };
-    video.src = url;
-  });
-}
-
-// XHR でアップロードし、進捗をコールバックする
+// XHR でアップロードし、進捗をコールバックする（fetch は進捗を取れない）
 function uploadClip(
   form: FormData,
   onProgress: (percent: number) => void,
@@ -104,15 +86,29 @@ export default function UploadPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [games, setGames] = useState<Game[]>([]);
-  const [gameId, setGameId] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [probe, setProbe] = useState<ProbeResult | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+  const [source, setSource] = useState<SourceVideo | null>(null);
+  const [edit, setEdit] = useState<ClipEdit | null>(null);
+  const [exported, setExported] = useState<ExportedClip | null>(null);
+  const [details, setDetails] = useState<ClipDetails>({
+    title: "",
+    description: "",
+    gameId: "",
+  });
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [fileError, setFileError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<number | null>(null);
+
+  // Object URL は state に持ち、差し替えとアンマウントのときだけ解放する
+  // （effect のクリーンアップで解放すると開発時の再マウントで URL が失効する）
+  const sourceUrlRef = useRef<string | null>(null);
+  const exportedUrlsRef = useRef<string[]>([]);
+  useEffect(() => {
+    return () => {
+      if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
+      exportedUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/games")
@@ -121,70 +117,107 @@ export default function UploadPage() {
       .catch(() => setGames([]));
   }, []);
 
-  // サムネイルのプレビュー URL（Object URL）を差し替え・アンマウント時に解放する
-  const previewUrlRef = useRef<string | null>(null);
-  const replacePreview = (blob: Blob | null) => {
-    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    previewUrlRef.current = blob ? URL.createObjectURL(blob) : null;
-    setPreviewUrl(previewUrlRef.current);
+  const releaseExported = () => {
+    exportedUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    exportedUrlsRef.current = [];
+    setExported(null);
   };
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    };
-  }, []);
 
-  const handleFileChange = async (selected: File | undefined) => {
-    setFile(selected ?? null);
-    setProbe(null);
+  const handleFile = async (file: File) => {
     setFileError(null);
-    replacePreview(null);
-    if (!selected) return;
-
-    if (!ACCEPTED_TYPES.includes(selected.type)) {
+    setError(null);
+    if (!ACCEPTED_TYPES.includes(file.type)) {
       setFileError("対応していない動画形式です（mp4 / webm / mov）");
       return;
     }
+
+    setPhase({ kind: "reading" });
     try {
-      const result = await probeVideo(selected);
-      setProbe(result);
-      replacePreview(result.thumbnail);
-      if (result.durationSec > MAX_CLIP_DURATION_SEC) {
-        setFileError(
-          `動画の長さは${MAX_CLIP_DURATION_SEC}秒以内にしてください（選択したファイル: ${formatDuration(result.durationSec)}）`,
+      const meta = await readVideoMeta(file);
+      if (!Number.isFinite(meta.durationSec) || meta.durationSec <= 0) {
+        throw new Error("動画の長さを読み取れませんでした");
+      }
+      if (meta.durationSec > MAX_CLIP_DURATION_SEC && !(await canTrimInBrowser())) {
+        throw new Error(
+          "このブラウザでは動画の切り出しができません。Chrome / Edge / Safari の最新版をお使いください。",
         );
       }
+
+      if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
+      const previewUrl = URL.createObjectURL(file);
+      sourceUrlRef.current = previewUrl;
+      releaseExported();
+
+      setSource({ file, meta, previewUrl });
+      setEdit(createDefaultEdit(meta.durationSec, MAX_CLIP_DURATION_SEC));
+      setPhase({ kind: "idle" });
+      setStep(1);
     } catch (err) {
+      setPhase({ kind: "idle" });
       setFileError(err instanceof Error ? err.message : "動画を読み込めませんでした");
     }
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!file || !probe) return;
-    setProgress(0);
+  // 編集 → 情報。ここで 1 度だけ書き出す
+  const handleExport = async () => {
+    if (!source || !edit) return;
     setError(null);
-
-    const form = new FormData();
-    form.append("video", file);
-    if (probe.thumbnail) {
-      form.append("thumbnail", probe.thumbnail, "thumb.jpg");
-    }
-    form.append("title", title);
-    form.append("description", description);
-    form.append("gameId", gameId);
-    form.append("durationSec", String(probe.durationSec));
-
+    setPhase({ kind: "exporting", progress: 0 });
     try {
-      const { status, body } = await uploadClip(form, setProgress);
+      const blob = await exportClip(source.file, edit, source.meta, (p) =>
+        setPhase({ kind: "exporting", progress: Math.round(p * 100) }),
+      );
+      const thumbnail = await captureThumbnail(
+        blob,
+        Math.min(1, edit.trim.length / 2),
+      ).catch(() => null);
+
+      releaseExported();
+      const previewUrl = URL.createObjectURL(blob);
+      const thumbnailUrl = thumbnail ? URL.createObjectURL(thumbnail) : null;
+      exportedUrlsRef.current = thumbnailUrl ? [previewUrl, thumbnailUrl] : [previewUrl];
+
+      setExported({
+        blob,
+        previewUrl,
+        thumbnail,
+        thumbnailUrl,
+        lengthSec: edit.trim.length,
+      });
+      setPhase({ kind: "idle" });
+      setStep(2);
+    } catch (err) {
+      setPhase({ kind: "idle" });
+      setError(err instanceof Error ? err.message : "書き出しに失敗しました");
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!exported) return;
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("video", exported.blob, "clip.mp4");
+      if (exported.thumbnail) {
+        form.append("thumbnail", exported.thumbnail, "thumb.jpg");
+      }
+      form.append("title", details.title);
+      form.append("description", details.description);
+      form.append("gameId", details.gameId);
+      form.append("durationSec", String(Math.round(exported.lengthSec)));
+
+      setPhase({ kind: "uploading", progress: 0 });
+      const { status, body } = await uploadClip(form, (p) => {
+        setPhase(p < 100 ? { kind: "uploading", progress: p } : { kind: "saving" });
+      });
       if (status !== 201 || !body.clip) {
         throw new Error(body.error ?? "アップロードに失敗しました");
       }
       router.push(`/clips/${body.clip.id}`);
       router.refresh();
     } catch (err) {
+      setPhase({ kind: "idle" });
       setError(err instanceof Error ? err.message : "エラーが発生しました");
-      setProgress(null);
     }
   };
 
@@ -196,119 +229,129 @@ export default function UploadPage() {
     );
   }
 
-  const uploading = progress !== null;
-  const fileLabel = file
-    ? probe
-      ? `${file.name}（${formatDuration(probe.durationSec)}）`
-      : `${file.name}（読み込み中...）`
-    : `動画ファイルを選択（最大${MAX_CLIP_DURATION_SEC}秒）`;
-  const canSubmit =
-    !uploading && !!file && !!probe && !fileError && !!title && !!gameId;
+  const busy = phase.kind !== "idle";
+  const phaseLabel =
+    phase.kind === "exporting"
+      ? `書き出し中... ${phase.progress}%`
+      : phase.kind === "uploading"
+        ? `アップロード中... ${phase.progress}%`
+        : phase.kind === "saving"
+          ? "保存中..."
+          : phase.kind === "reading"
+            ? "動画を読み込み中..."
+            : "";
+  const determinate = phase.kind === "exporting" || phase.kind === "uploading";
 
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 2, md: 4 }, maxWidth: 640, mx: "auto" }}>
-      <Typography variant="h2" sx={{ mb: 1 }}>
-        クリップをアップロード
+    <Box sx={{ maxWidth: 1100, mx: "auto" }}>
+      <Typography variant="h2" sx={{ mb: 2 }}>
+        クリップを投稿
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        1分以内のゲームクリップを投稿できます。対応形式は mp4 / webm / mov です。
-      </Typography>
-      <Box component="form" onSubmit={handleSubmit}>
-        <Stack spacing={2.5}>
-          {error && <Alert severity="error">{error}</Alert>}
 
-          <Button
-            component="label"
-            variant="outlined"
-            color={fileError ? "error" : "primary"}
-            startIcon={<CloudUploadIcon />}
-            disabled={uploading}
-            sx={{ py: 2, borderStyle: "dashed" }}
-          >
-            {fileLabel}
-            <input
-              type="file"
-              accept={ACCEPTED_TYPES.join(",")}
-              hidden
-              onChange={(e) => handleFileChange(e.target.files?.[0])}
+      <Stepper activeStep={step} sx={{ mb: 3 }}>
+        {STEPS.map((label) => (
+          <Step key={label}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {step === 0 && (
+        <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
+          <Stack spacing={2}>
+            {fileError && <Alert severity="warning">{fileError}</Alert>}
+            <FileDropzone
+              accept={ACCEPTED_TYPES}
+              busy={phase.kind === "reading"}
+              onFile={handleFile}
             />
-          </Button>
-          {fileError && <Alert severity="warning">{fileError}</Alert>}
+          </Stack>
+        </Paper>
+      )}
 
-          {previewUrl && (
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                サムネイル（動画の1秒目から自動生成）
-              </Typography>
-              <Box
-                component="img"
-                src={previewUrl}
-                alt="サムネイルのプレビュー"
-                sx={{
-                  display: "block",
-                  width: "100%",
-                  maxWidth: 320,
-                  aspectRatio: "16 / 9",
-                  objectFit: "cover",
-                  borderRadius: 1,
-                  mt: 0.5,
-                }}
-              />
-            </Box>
+      {step === 1 && source && edit && (
+        <>
+          {source.meta.durationSec > MAX_CLIP_DURATION_SEC && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              この動画は1分を超えています。投稿する範囲を選んでください。
+            </Alert>
           )}
-
-          <TextField
-            required
-            label="タイトル"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            disabled={uploading}
-          />
-          <TextField
-            multiline
-            minRows={3}
-            label="説明"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={uploading}
-          />
-          <TextField
-            select
-            required
-            label="ゲーム"
-            value={gameId}
-            onChange={(e) => setGameId(e.target.value)}
-            disabled={uploading}
-          >
-            {games.map((game) => (
-              <MenuItem key={game.id} value={game.id}>
-                {game.name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          {uploading && (
-            <Box>
-              <LinearProgress
-                variant={progress < 100 ? "determinate" : "indeterminate"}
-                value={progress}
-              />
-              <Typography variant="caption" color="text.secondary">
-                {progress < 100 ? `アップロード中... ${progress}%` : "保存中..."}
-              </Typography>
-            </Box>
+          {hasEffects(edit) && !canBakeFilters() && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              このブラウザではフィルターを動画に焼き込めません。テキストは反映されますが、
+              色の調整はプレビューのみになります。
+            </Alert>
           )}
+          <EditStep
+            file={source.file}
+            previewUrl={source.previewUrl}
+            durationSec={source.meta.durationSec}
+            aspect={source.meta.width / Math.max(1, source.meta.height)}
+            maxSec={MAX_CLIP_DURATION_SEC}
+            edit={edit}
+            onChange={setEdit}
+          />
+        </>
+      )}
 
+      {step === 2 && exported && (
+        <DetailsStep
+          previewUrl={exported.previewUrl}
+          thumbnailUrl={exported.thumbnailUrl}
+          lengthSec={exported.lengthSec}
+          sizeBytes={exported.blob.size}
+          games={games}
+          value={details}
+          onChange={setDetails}
+          disabled={busy}
+        />
+      )}
+
+      {busy && (
+        <Box sx={{ mt: 3 }}>
+          <LinearProgress
+            variant={determinate ? "determinate" : "indeterminate"}
+            value={determinate ? phase.progress : undefined}
+          />
+          <Typography variant="caption" color="text.secondary">
+            {phaseLabel}
+          </Typography>
+        </Box>
+      )}
+
+      {step > 0 && (
+        <Stack direction="row" spacing={2} sx={{ mt: 3, justifyContent: "flex-end" }}>
           <Button
-            type="submit"
-            variant="contained"
-            size="large"
-            disabled={!canSubmit}
+            startIcon={<ArrowBackIcon />}
+            disabled={busy}
+            onClick={() => setStep(step - 1)}
+            sx={{ mr: "auto" }}
           >
-            アップロード
+            戻る
           </Button>
+          {step === 1 && (
+            <Button variant="contained" size="large" disabled={busy} onClick={handleExport}>
+              この範囲で進む
+            </Button>
+          )}
+          {step === 2 && (
+            <Button
+              variant="contained"
+              size="large"
+              disabled={busy || !details.title || !details.gameId}
+              onClick={handleSubmit}
+            >
+              投稿する
+            </Button>
+          )}
         </Stack>
-      </Box>
-    </Paper>
+      )}
+    </Box>
   );
 }
