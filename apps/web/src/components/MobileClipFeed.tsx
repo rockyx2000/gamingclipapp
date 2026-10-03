@@ -4,6 +4,7 @@
 // md 未満の画面幅でのみマウントされ、AppShell の上に fixed で被せる。
 // 開いたクリップを先頭に、同じゲーム → 他のクリップと続くフィードを表示し、
 // スワイプで切り替わるたびに URL を /clips/<id> へ置き換える。
+// listId があるとき（プレイリスト再生）は渡されたプレイリストの順に並び、URL にも ?list を残す。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -18,7 +19,9 @@ import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ChatBubbleOutlinedIcon from "@mui/icons-material/ChatBubbleOutlined";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import ShareIcon from "@mui/icons-material/Share";
 import ThumbUpIcon from "@mui/icons-material/ThumbUp";
 import ThumbUpOutlinedIcon from "@mui/icons-material/ThumbUpOutlined";
@@ -28,28 +31,42 @@ import type { ClipWithGame } from "@/lib/types";
 import { formatDuration, formatViews } from "@/lib/format";
 import { displaySx } from "@/theme";
 import { Wordmark } from "./Wordmark";
+import { CommentsSheet } from "./CommentsSheet";
+import { SaveToPlaylistDialog } from "./SaveToPlaylistDialog";
+import { useLike } from "./useLike";
+import { useRecordView } from "./useRecordView";
+import { useRequireLogin } from "./useRequireLogin";
 
 interface Props {
   clips: ClipWithGame[];
   startId: string;
+  /** ログイン中のユーザーがいいね済みのクリップ ID */
+  likedIds: string[];
+  /** プレイリスト再生中ならその ID */
+  listId?: string;
 }
 
-export function MobileClipFeed({ clips, startId }: Props) {
+export function MobileClipFeed(props: Props) {
   const theme = useTheme();
   // SSR とハイドレーション時は false になり、クライアントで判定後に描画される
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   if (!isMobile) return null;
-  return <Feed clips={clips} startId={startId} />;
+  return <Feed {...props} />;
 }
 
-function Feed({ clips, startId }: Props) {
+function Feed({ clips, startId, likedIds, listId }: Props) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState(startId);
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
-  const [liked, setLiked] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<string | null>(null);
+  const [saveClipId, setSaveClipId] = useState<string | null>(null);
+  const [commentClip, setCommentClip] = useState<ClipWithGame | null>(null);
+  // シートで投稿・削除した後の件数（ボタンの数字に反映する）
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const requireLogin = useRequireLogin();
+  const recordView = useRecordView();
 
   // 背後のページ（PC レイアウト）がスクロールしないようにロックする
   useEffect(() => {
@@ -96,22 +113,29 @@ function Feed({ clips, startId }: Props) {
     container.querySelectorAll<HTMLVideoElement>("video").forEach((video) => {
       if (video.dataset.clipId === activeId) {
         video.muted = muted;
-        video.play().catch(() => {
-          // 音声付き自動再生がブロックされた場合はミュートで再生する
-          video.muted = true;
-          setMuted(true);
-          video.play().catch(() => {});
-        });
+        video
+          .play()
+          .then(() => recordView(activeId))
+          .catch(() => {
+            // 音声付き自動再生がブロックされた場合はミュートで再生する
+            video.muted = true;
+            setMuted(true);
+            video
+              .play()
+              .then(() => recordView(activeId))
+              .catch(() => {});
+          });
       } else {
         video.pause();
         video.currentTime = 0;
       }
     });
     // スワイプで切り替わったクリップの URL を共有できるようにする
-    if (window.location.pathname !== `/clips/${activeId}`) {
-      window.history.replaceState(null, "", `/clips/${activeId}`);
+    const url = listId ? `/clips/${activeId}?list=${listId}` : `/clips/${activeId}`;
+    if (window.location.pathname + window.location.search !== url) {
+      window.history.replaceState(null, "", url);
     }
-  }, [activeId, muted]);
+  }, [activeId, muted, listId, recordView]);
 
   // 下端の細い進行バーを requestAnimationFrame で滑らかに更新する
   // （React の state を使うと timeupdate の頻度に縛られてカクつくため DOM を直接触る）
@@ -170,16 +194,8 @@ function Feed({ clips, startId }: Props) {
     }
   };
 
-  const toggleLike = (id: string) => {
-    setLiked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const openSave = (id: string) => {
+    if (requireLogin()) setSaveClipId(id);
   };
 
   return (
@@ -205,7 +221,6 @@ function Feed({ clips, startId }: Props) {
       >
         {clips.map((clip) => {
           const isActive = clip.id === activeId;
-          const isLiked = liked.has(clip.id);
           return (
             <Box
               key={clip.id}
@@ -306,17 +321,32 @@ function Feed({ clips, startId }: Props) {
                   alignItems: "center",
                 }}
               >
+                <FeedLikeButton
+                  clipId={clip.id}
+                  initialLiked={likedIds.includes(clip.id)}
+                  initialLikes={clip.likes}
+                />
                 <Stack sx={{ alignItems: "center" }}>
                   <IconButton
-                    onClick={() => toggleLike(clip.id)}
-                    sx={{ color: isLiked ? "primary.main" : "#fff" }}
-                    aria-label="いいね"
+                    onClick={() => setCommentClip(clip)}
+                    sx={{ color: "#fff" }}
+                    aria-label="コメント"
                   >
-                    {isLiked ? <ThumbUpIcon /> : <ThumbUpOutlinedIcon />}
+                    <ChatBubbleOutlinedIcon />
                   </IconButton>
                   <Typography component="span" sx={{ ...displaySx, fontSize: 14 }}>
-                    {(clip.likes + (isLiked ? 1 : 0)).toLocaleString()}
+                    {(commentCounts[clip.id] ?? clip.commentCount).toLocaleString()}
                   </Typography>
+                </Stack>
+                <Stack sx={{ alignItems: "center" }}>
+                  <IconButton
+                    onClick={() => openSave(clip.id)}
+                    sx={{ color: "#fff" }}
+                    aria-label="プレイリストに保存"
+                  >
+                    <PlaylistAddIcon />
+                  </IconButton>
+                  <Typography variant="caption">保存</Typography>
                 </Stack>
                 <Stack sx={{ alignItems: "center" }}>
                   <IconButton
@@ -422,6 +452,53 @@ function Feed({ clips, startId }: Props) {
         onClose={() => setToast(null)}
         message={toast}
       />
+
+      {commentClip && (
+        <CommentsSheet
+          open
+          onClose={() => setCommentClip(null)}
+          clipId={commentClip.id}
+          uploaderId={commentClip.uploader.id}
+          onCountChange={(count) =>
+            setCommentCounts((prev) => ({ ...prev, [commentClip.id]: count }))
+          }
+        />
+      )}
+
+      {saveClipId && (
+        <SaveToPlaylistDialog
+          open
+          onClose={() => setSaveClipId(null)}
+          clipId={saveClipId}
+        />
+      )}
     </Box>
+  );
+}
+
+function FeedLikeButton({
+  clipId,
+  initialLiked,
+  initialLikes,
+}: {
+  clipId: string;
+  initialLiked: boolean;
+  initialLikes: number;
+}) {
+  const { liked, likes, toggle } = useLike(clipId, initialLiked, initialLikes);
+  return (
+    <Stack sx={{ alignItems: "center" }}>
+      <IconButton
+        onClick={toggle}
+        sx={{ color: liked ? "primary.main" : "#fff" }}
+        aria-label={liked ? "いいねを取り消す" : "いいね"}
+        aria-pressed={liked}
+      >
+        {liked ? <ThumbUpIcon /> : <ThumbUpOutlinedIcon />}
+      </IconButton>
+      <Typography component="span" sx={{ ...displaySx, fontSize: 14 }}>
+        {likes.toLocaleString()}
+      </Typography>
+    </Stack>
   );
 }

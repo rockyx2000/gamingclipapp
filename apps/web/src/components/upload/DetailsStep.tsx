@@ -9,7 +9,6 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Grid from "@mui/material/Grid";
-import MenuItem from "@mui/material/MenuItem";
 import Slider from "@mui/material/Slider";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
@@ -18,6 +17,7 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { formatTimecode } from "@/lib/video-edit";
 import { displaySx } from "@/theme";
 import type { Game } from "@/lib/types";
+import { gameMenuItems } from "@/components/gameMenuItems";
 
 export interface ClipDetails {
   title: string;
@@ -151,11 +151,7 @@ export function DetailsStep({
             onChange={(e) => onChange({ ...value, gameId: e.target.value })}
             disabled={disabled}
           >
-            {games.map((game) => (
-              <MenuItem key={game.id} value={game.id}>
-                {game.name}
-              </MenuItem>
-            ))}
+            {gameMenuItems(games, (g) => g.id)}
           </TextField>
         </Stack>
       </Grid>

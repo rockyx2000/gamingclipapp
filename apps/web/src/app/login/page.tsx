@@ -16,6 +16,12 @@ import Typography from "@mui/material/Typography";
 import { useAuth } from "@/components/AuthProvider";
 import type { User } from "@/lib/types";
 
+// ログイン後の戻り先。?next= はサイト内のパスだけ受け付ける（外部サイトへの誘導を防ぐ）
+function nextPath(): string {
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { refresh } = useAuth();
@@ -42,7 +48,7 @@ export default function LoginPage() {
       return;
     }
     await refresh();
-    router.push("/");
+    router.push(nextPath());
     router.refresh();
   };
 

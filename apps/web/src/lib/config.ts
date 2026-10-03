@@ -15,6 +15,9 @@ export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 /** 投稿したクリップのメタデータを保存する JSON ファイル */
 export const CLIPS_FILE = path.join(DATA_DIR, "clips.json");
 
+/** いいね・再生記録・プレイリストを保存する JSON ファイル */
+export const SOCIAL_FILE = path.join(DATA_DIR, "social.json");
+
 /** アップロードできる動画ファイルの上限サイズ（バイト） */
 export const MAX_UPLOAD_BYTES =
   (Number(process.env.MAX_UPLOAD_MB) || 200) * 1024 * 1024;

@@ -35,12 +35,22 @@ interface Props {
   poster?: string;
   /** true のとき自動再生を試みる */
   autoPlay?: boolean;
+  /** 再生が始まるたびに呼ばれる（再生数の記録用） */
+  onPlay?: () => void;
+  /** 最後まで再生したときに呼ばれる（プレイリストの次へ進む用） */
+  onEnded?: () => void;
 }
 
 const HIDE_CONTROLS_MS = 2500;
 const SEEK_STEP_SEC = 5;
 
-export function VideoPlayer({ src, poster, autoPlay = false }: Props) {
+export function VideoPlayer({
+  src,
+  poster,
+  autoPlay = false,
+  onPlay,
+  onEnded,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideTimer = useRef<number | null>(null);
@@ -250,6 +260,7 @@ export function VideoPlayer({ src, poster, autoPlay = false }: Props) {
           setPlaying(true);
           setEnded(false);
           showControls();
+          onPlay?.();
         }}
         onPause={() => {
           setPlaying(false);
@@ -258,6 +269,7 @@ export function VideoPlayer({ src, poster, autoPlay = false }: Props) {
         onEnded={() => {
           setEnded(true);
           setControlsVisible(true);
+          onEnded?.();
         }}
         onTimeUpdate={(e: SyntheticEvent<HTMLVideoElement>) => {
           if (!seeking) setCurrentTime(e.currentTarget.currentTime);

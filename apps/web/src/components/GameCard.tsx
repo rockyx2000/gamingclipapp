@@ -27,11 +27,14 @@ export function GameCard({ game }: { game: Game }) {
               クリップ
             </Typography>
           </Stack>
+          <Typography variant="caption" color="text.secondary">
+            {game.genre}
+          </Typography>
           <Typography
             variant="body2"
             color="text.secondary"
             sx={{
-              mt: 1,
+              mt: 0.5,
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",

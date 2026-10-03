@@ -7,13 +7,13 @@ import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useAuth } from "@/components/AuthProvider";
 import type { Game } from "@/lib/types";
+import { gameMenuItems } from "@/components/gameMenuItems";
 
 export default function NewRecruitPage() {
   const router = useRouter();
@@ -88,11 +88,7 @@ export default function NewRecruitPage() {
             value={gameId}
             onChange={(e) => setGameId(e.target.value)}
           >
-            {games.map((game) => (
-              <MenuItem key={game.id} value={game.id}>
-                {game.name}
-              </MenuItem>
-            ))}
+            {gameMenuItems(games, (g) => g.id)}
           </TextField>
           <TextField
             required
