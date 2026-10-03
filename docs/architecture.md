@@ -6,7 +6,8 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 
 - 1 分以内のゲームクリップを投稿できる（ショートは独立した機能ではなく、すべてのクリップが 1 つの扱い）
 - PC では YouTube 風の視聴ページ、スマホでは Shorts 風の全画面縦スワイプ視聴になる（URL は同じ `/clips/:id`）
-- ゲームカテゴリでの検索と、ゲームごとのチームメンバー募集掲示板を持つ
+- ゲームカテゴリ（ジャンル付き）での検索と、ゲームごとのチームメンバー募集掲示板を持つ
+- いいね・プレイリスト・再生数ランキング・急上昇フィードを持つ
 - アカウント機能を持つが、未ログインでも閲覧は可能
 
 ## 現在のフェーズ: フロントエンドモック (PoC)
@@ -31,6 +32,7 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 - 募集・セッションはインメモリのためサーバー再起動で初期化される（モックとして許容）
 - 動画のアップロードは実装済み。ファイルは **`src/lib/storage.ts`**（ストレージ層）経由で
   `DATA_DIR/uploads/` に保存し、投稿メタデータは `DATA_DIR/clips.json` に永続化する
+- いいね・再生記録・プレイリストは `DATA_DIR/social.json` に永続化する（後述）
 
 ## API 一覧
 
@@ -41,7 +43,19 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 | POST | `/api/clips` | クリップ投稿（要ログイン、multipart/form-data、`durationSec` は 60 以下） |
 | GET | `/api/media/:clipId/:file` | アップロードした動画・サムネイルの配信（Range 対応） |
 | GET | `/api/clips/:id` | クリップ詳細 |
-| GET | `/api/games?q=` | ゲーム一覧・検索 |
+| PUT / DELETE | `/api/clips/:id/like` | いいねする / 外す（要ログイン、冪等。`{ liked, likes }` を返す） |
+| POST | `/api/clips/:id/view` | 再生を 1 回記録（ログイン不要、同じ視聴者の 30 分以内の重複は数えない） |
+| GET | `/api/ranking?period=&game=` | 再生数ランキング（`period` は `day` / `week` / `month` / `all`） |
+| GET | `/api/trending?game=` | 急上昇 |
+| GET | `/api/me/likes` | 自分がいいねしたクリップ（要ログイン） |
+| GET | `/api/playlists` | 自分のプレイリスト一覧（要ログイン） |
+| POST | `/api/playlists` | 作成（要ログイン。`{ title, description?, visibility?, clipId? }`） |
+| GET | `/api/playlists/:id` | 詳細（非公開は持ち主だけ。他人には 404） |
+| PATCH | `/api/playlists/:id` | タイトル・説明・公開設定・並び順（`clipIds`）の変更（持ち主のみ） |
+| DELETE | `/api/playlists/:id` | 削除（持ち主のみ） |
+| POST | `/api/playlists/:id/clips` | `{ clipId }` を末尾に追加（持ち主のみ、追加済みなら何もしない） |
+| DELETE | `/api/playlists/:id/clips/:clipId` | プレイリストから外す（持ち主のみ） |
+| GET | `/api/games?q=&genre=` | ゲーム一覧・検索（ジャンルで絞り込み可） |
 | GET | `/api/games/:slug` | ゲーム詳細 |
 | GET | `/api/recruits?game=` | 募集一覧 |
 | POST | `/api/recruits` | 募集投稿（要ログイン） |
@@ -57,8 +71,10 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 `src/lib/types.ts` を参照。主要エンティティ:
 
 - `User` - ユーザー
-- `Game` - ゲームカテゴリ
-- `Clip` - 動画クリップ（`durationSec` は `MAX_CLIP_DURATION_SEC` = 60 以下）
+- `Game` - ゲームカテゴリ（`genre` は `GAME_GENRES` のいずれか）
+- `Clip` - 動画クリップ（`durationSec` は `MAX_CLIP_DURATION_SEC` = 60 以下）。
+  API が返す `views` / `likes` は保存値に記録分を足した現在の数
+- `Playlist` - プレイリスト（`clipIds` が再生順。`visibility` は `public` / `private`）
 - `RecruitPost` - メンバー募集投稿（`Comment` の配列を持つ）
 
 ## 視聴ページのレスポンシブ切り替え
@@ -74,6 +90,44 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
   - 切り替わるたびに `history.replaceState` で URL を `/clips/<id>` に更新する
 - 判定は画面幅ベース（User-Agent ではない）なので、ブラウザの幅を狭めるだけで
   スマホ表示を確認できる
+
+## いいね・再生数・ランキング・プレイリスト
+
+すべて `src/lib/mock-db.ts` に実装し、`DATA_DIR/social.json` に保存する。
+
+```
+social.json
+  likes        [{ clipId, userId, at }]          いいね（誰がいつ）
+  viewTotals   { clipId: 記録した再生の累計 }
+  viewBuckets  { clipId: { 時間バケット: 再生数 } }  直近 31 日だけ残す
+  playlists    [Playlist]
+```
+
+- **書き込み**: 一時ファイルに書いて `rename` する。書き込みは 1 本の Promise チェーンに
+  並べ、同時に書いて壊れないようにする。再生は 1 回ごとに書くと重いので 5 秒まとめて保存する
+- **再生数**: 視聴ページ（PC）は `VideoPlayer` の再生開始、スマホのフィードは
+  表示中のクリップの再生開始で `POST /api/clips/:id/view` を送る（`useRecordView`）。
+  ページを開いただけ・プリフェッチでは数えない。視聴者はログインと関係なく
+  匿名 ID の Cookie（`gca_viewer`）で区別し、同じ視聴者の 30 分以内の再生は 1 回にまとめる
+- **ランキング (`/ranking`)**: 日間・週間・月間は直近 24 時間 / 7 日 / 30 日の
+  時間バケットの合計、総合は総再生数で並べる。ゲームで絞り込める
+- **急上昇 (`/trending`)**: 直近 48 時間の再生といいねを、12 時間で重みが半分になる
+  減衰をかけて合計したスコアで並べる（いいね 1 件 = 再生 5 回ぶん）。
+  総再生数が多いだけの古いクリップより、いま伸びているクリップが上に来る
+- **シードの再生履歴**: シードクリップには起動時に直近 30 日の再生履歴を生成する
+  （クリップ ID から決まる疑似乱数で、一部は直近 2 日に山を置く）。
+  ランキングと急上昇の見た目を確かめるためのもので、永続化しない
+- **いいね**: 押した瞬間に表示を変え、API が失敗したら戻す（`useLike`）。
+  未ログインなら `/login?next=<今の URL>` へ送り、ログイン後に戻ってくる
+- **プレイリスト**: 視聴ページの「保存」からチェックで追加・削除し、その場で新規作成もできる。
+  `/playlists` が一覧（先頭に「高く評価したクリップ」= いいね一覧）、
+  `/playlists/:id` が詳細で、持ち主は編集・削除・並べ替えができる。
+  非公開のものは持ち主以外には 404 を返し、存在も漏らさない
+- **プレイリスト再生**: `/clips/:id?list=<プレイリスト ID>` で開くと、PC は右側に一覧を出し
+  最後まで見たら次のクリップへ進む。スマホはプレイリストの順にスワイプする
+- **制限事項（PoC）**: 再生数の重複判定はインメモリなので再起動でリセットされる。
+  Cookie を消せば数え直せるため、本番では IP やログインユーザーも合わせて判定し、
+  集計は DB 側（時間別の集計テーブルなど）に移す
 
 ## 動画のアップロードと保存
 
