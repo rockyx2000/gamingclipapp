@@ -23,6 +23,10 @@ import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import HomeIcon from "@mui/icons-material/Home";
+import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+import PlaylistPlayIcon from "@mui/icons-material/PlaylistPlay";
+import ThumbUpOutlinedIcon from "@mui/icons-material/ThumbUpOutlined";
+import WhatshotIcon from "@mui/icons-material/Whatshot";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import GroupsIcon from "@mui/icons-material/Groups";
 import SearchIcon from "@mui/icons-material/Search";
@@ -36,9 +40,22 @@ const DRAWER_WIDTH = 220;
 
 const NAV_ITEMS = [
   { label: "ホーム", href: "/", icon: <HomeIcon /> },
+  { label: "急上昇", href: "/trending", icon: <WhatshotIcon /> },
+  { label: "ランキング", href: "/ranking", icon: <LeaderboardIcon /> },
   { label: "ゲーム", href: "/games", icon: <SportsEsportsIcon /> },
   { label: "メンバー募集", href: "/recruits", icon: <GroupsIcon /> },
 ];
+
+// 自分のライブラリ。未ログインでも出し、開くとログインを案内する
+const LIBRARY_ITEMS = [
+  { label: "プレイリスト", href: "/playlists", icon: <PlaylistPlayIcon /> },
+  { label: "高く評価したクリップ", href: "/liked", icon: <ThumbUpOutlinedIcon /> },
+];
+
+/** 下の階層（/games/xxx など）にいるときも親のナビを現在地として扱う */
+function isCurrent(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -61,23 +78,32 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.refresh();
   };
 
+  const renderNav = (items: typeof NAV_ITEMS) => (
+    <List>
+      {items.map((item) => (
+        <ListItemButton
+          key={item.href}
+          component={Link}
+          href={item.href}
+          selected={isCurrent(pathname, item.href)}
+          onClick={() => setMobileOpen(false)}
+          sx={{ mx: 1 }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
+          <ListItemText primary={item.label} />
+        </ListItemButton>
+      ))}
+    </List>
+  );
+
   const drawerContent = (
     <Box sx={{ pt: 1 }}>
-      <List>
-        {NAV_ITEMS.map((item) => (
-          <ListItemButton
-            key={item.href}
-            component={Link}
-            href={item.href}
-            selected={pathname === item.href}
-            onClick={() => setMobileOpen(false)}
-            sx={{ mx: 1 }}
-          >
-            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} />
-          </ListItemButton>
-        ))}
-      </List>
+      {renderNav(NAV_ITEMS)}
+      <Divider sx={{ my: 1 }} />
+      <Typography variant="caption" color="text.secondary" sx={{ px: 3 }}>
+        ライブラリ
+      </Typography>
+      {renderNav(LIBRARY_ITEMS)}
       <Divider sx={{ my: 1 }} />
       <Typography variant="caption" color="text.secondary" sx={{ px: 3 }}>
         1分以内のゲームクリップ共有
