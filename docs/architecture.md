@@ -7,7 +7,7 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 - 1 分以内のゲームクリップを投稿できる（ショートは独立した機能ではなく、すべてのクリップが 1 つの扱い）
 - PC では YouTube 風の視聴ページ、スマホでは Shorts 風の全画面縦スワイプ視聴になる（URL は同じ `/clips/:id`）
 - ゲームカテゴリ（ジャンル付き）での検索と、ゲームごとのチームメンバー募集掲示板を持つ
-- いいね・プレイリスト・再生数ランキング・急上昇フィードを持つ
+- いいね・コメント・プレイリスト・再生数ランキング・急上昇フィードを持つ
 - アカウント機能を持つが、未ログインでも閲覧は可能
 
 ## 現在のフェーズ: フロントエンドモック (PoC)
@@ -32,7 +32,7 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 - 募集・セッションはインメモリのためサーバー再起動で初期化される（モックとして許容）
 - 動画のアップロードは実装済み。ファイルは **`src/lib/storage.ts`**（ストレージ層）経由で
   `DATA_DIR/uploads/` に保存し、投稿メタデータは `DATA_DIR/clips.json` に永続化する
-- いいね・再生記録・プレイリストは `DATA_DIR/social.json` に永続化する（後述）
+- いいね・コメント・再生記録・プレイリストは `DATA_DIR/social.json` に永続化する（後述）
 
 ## API 一覧
 
@@ -45,6 +45,9 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 | GET | `/api/clips/:id` | クリップ詳細 |
 | PUT / DELETE | `/api/clips/:id/like` | いいねする / 外す（要ログイン、冪等。`{ liked, likes }` を返す） |
 | POST | `/api/clips/:id/view` | 再生を 1 回記録（ログイン不要、同じ視聴者の 30 分以内の重複は数えない） |
+| GET | `/api/clips/:id/comments` | コメント一覧（新しい順） |
+| POST | `/api/clips/:id/comments` | コメント投稿（要ログイン、`{ body }`、500 文字以内） |
+| DELETE | `/api/clips/:id/comments/:commentId` | コメント削除（書いた本人かクリップの投稿者） |
 | GET | `/api/ranking?period=&game=` | 再生数ランキング（`period` は `day` / `week` / `month` / `all`） |
 | GET | `/api/trending?game=` | 急上昇 |
 | GET | `/api/me/likes` | 自分がいいねしたクリップ（要ログイン） |
@@ -91,7 +94,7 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 - 判定は画面幅ベース（User-Agent ではない）なので、ブラウザの幅を狭めるだけで
   スマホ表示を確認できる
 
-## いいね・再生数・ランキング・プレイリスト
+## いいね・コメント・再生数・ランキング・プレイリスト
 
 すべて `src/lib/mock-db.ts` に実装し、`DATA_DIR/social.json` に保存する。
 
@@ -101,6 +104,7 @@ social.json
   viewTotals   { clipId: 記録した再生の累計 }
   viewBuckets  { clipId: { 時間バケット: 再生数 } }  直近 31 日だけ残す
   playlists    [Playlist]
+  clipComments { clipId: [{ id, authorId, body, createdAt }] }  投稿順
 ```
 
 - **書き込み**: 一時ファイルに書いて `rename` する。書き込みは 1 本の Promise チェーンに
@@ -119,6 +123,11 @@ social.json
   ランキングと急上昇の見た目を確かめるためのもので、永続化しない
 - **いいね**: 押した瞬間に表示を変え、API が失敗したら戻す（`useLike`）。
   未ログインなら `/login?next=<今の URL>` へ送り、ログイン後に戻ってくる
+- **コメント**: PC は説明欄の下、スマホはフィード右側のボタンから下に開くシート
+  （`CommentsSheet`）で読み書きする。どちらも `ClipComments` を使い、投稿・削除は
+  API の結果で手元の一覧を更新する。投稿者は ID だけ保存し、表示時に `User` を引く。
+  削除できるのは書いた本人とクリップの投稿者。`social.json` に `clipComments` が
+  無いとき（初回）だけ見本のコメントを入れる
 - **プレイリスト**: 視聴ページの「保存」からチェックで追加・削除し、その場で新規作成もできる。
   `/playlists` が一覧（先頭に「高く評価したクリップ」= いいね一覧）、
   `/playlists/:id` が詳細で、持ち主は編集・削除・並べ替えができる。
