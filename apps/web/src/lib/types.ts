@@ -102,7 +102,11 @@ export type RankingPeriod = "day" | "week" | "month" | "all";
 // API レスポンス用の複合型
 export interface ClipWithGame extends Clip {
   game: Game;
+  commentCount: number;
 }
+
+/** クリップへのコメント本文の上限（文字数） */
+export const MAX_CLIP_COMMENT_LENGTH = 500;
 
 export interface RecruitWithGame extends RecruitPost {
   game: Game;

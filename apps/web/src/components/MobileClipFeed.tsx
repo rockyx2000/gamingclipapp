@@ -19,6 +19,7 @@ import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ChatBubbleOutlinedIcon from "@mui/icons-material/ChatBubbleOutlined";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import ShareIcon from "@mui/icons-material/Share";
@@ -30,6 +31,7 @@ import type { ClipWithGame } from "@/lib/types";
 import { formatDuration, formatViews } from "@/lib/format";
 import { displaySx } from "@/theme";
 import { Wordmark } from "./Wordmark";
+import { CommentsSheet } from "./CommentsSheet";
 import { SaveToPlaylistDialog } from "./SaveToPlaylistDialog";
 import { useLike } from "./useLike";
 import { useRecordView } from "./useRecordView";
@@ -60,6 +62,9 @@ function Feed({ clips, startId, likedIds, listId }: Props) {
   const [paused, setPaused] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [saveClipId, setSaveClipId] = useState<string | null>(null);
+  const [commentClip, setCommentClip] = useState<ClipWithGame | null>(null);
+  // シートで投稿・削除した後の件数（ボタンの数字に反映する）
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const requireLogin = useRequireLogin();
   const recordView = useRecordView();
 
@@ -323,6 +328,18 @@ function Feed({ clips, startId, likedIds, listId }: Props) {
                 />
                 <Stack sx={{ alignItems: "center" }}>
                   <IconButton
+                    onClick={() => setCommentClip(clip)}
+                    sx={{ color: "#fff" }}
+                    aria-label="コメント"
+                  >
+                    <ChatBubbleOutlinedIcon />
+                  </IconButton>
+                  <Typography component="span" sx={{ ...displaySx, fontSize: 14 }}>
+                    {(commentCounts[clip.id] ?? clip.commentCount).toLocaleString()}
+                  </Typography>
+                </Stack>
+                <Stack sx={{ alignItems: "center" }}>
+                  <IconButton
                     onClick={() => openSave(clip.id)}
                     sx={{ color: "#fff" }}
                     aria-label="プレイリストに保存"
@@ -435,6 +452,18 @@ function Feed({ clips, startId, likedIds, listId }: Props) {
         onClose={() => setToast(null)}
         message={toast}
       />
+
+      {commentClip && (
+        <CommentsSheet
+          open
+          onClose={() => setCommentClip(null)}
+          clipId={commentClip.id}
+          uploaderId={commentClip.uploader.id}
+          onCountChange={(count) =>
+            setCommentCounts((prev) => ({ ...prev, [commentClip.id]: count }))
+          }
+        />
+      )}
 
       {saveClipId && (
         <SaveToPlaylistDialog

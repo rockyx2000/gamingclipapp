@@ -9,11 +9,19 @@ import Link from "next/link";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { getClip, getPlaylist, isLiked, likedClipIds, listClips } from "@/lib/mock-db";
+import {
+  getClip,
+  getPlaylist,
+  isLiked,
+  likedClipIds,
+  listClipComments,
+  listClips,
+} from "@/lib/mock-db";
 import { getCurrentUser } from "@/lib/auth";
 import type { ClipWithGame } from "@/lib/types";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipCard } from "@/components/ClipCard";
+import { ClipComments } from "@/components/ClipComments";
 import { LikeButton } from "@/components/LikeButton";
 import { PlaylistPanel } from "@/components/PlaylistPanel";
 import { SaveButton } from "@/components/SaveButton";
@@ -111,6 +119,14 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
               {clip.description}
             </Typography>
           </Paper>
+          <Box sx={{ mt: 3 }}>
+            <ClipComments
+              key={clip.id}
+              clipId={clip.id}
+              uploaderId={clip.uploader.id}
+              initialComments={listClipComments(clip.id) ?? []}
+            />
+          </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 4 }}>
           {playlist && <PlaylistPanel playlist={playlist} currentId={clip.id} />}

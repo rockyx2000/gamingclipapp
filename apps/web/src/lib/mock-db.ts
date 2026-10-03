@@ -563,6 +563,27 @@ const seedClips: Clip[] = [
   },
 ];
 
+// social.json にコメントがまだ無いとき（初回）だけ入れる見本のコメント
+const seedClipComments: Record<string, StoredClipComment[]> = {
+  c1: [
+    { id: "cc1", authorId: "u2", body: "最後のダッシュからの切り返しえぐい", createdAt: "2026-07-08T13:05:00.000Z" },
+    { id: "cc2", authorId: "u5", body: "これ味方視点で見たら泣く", createdAt: "2026-07-08T15:40:00.000Z" },
+  ],
+  c3: [
+    { id: "cc3", authorId: "u1", body: "グレの投げ込み位置、真似させてもらいます", createdAt: "2026-07-07T11:20:00.000Z" },
+  ],
+  c8: [
+    { id: "cc4", authorId: "u5", body: "0.5秒は盛ってると思ったらほんとに0.5秒だった", createdAt: "2026-07-10T13:00:00.000Z" },
+    { id: "cc5", authorId: "u3", body: "キー配置教えてほしい", createdAt: "2026-07-10T14:30:00.000Z" },
+  ],
+  c14: [
+    { id: "cc6", authorId: "u1", body: "最後のフラッシュの判断が完璧", createdAt: "2026-07-11T20:10:00.000Z" },
+  ],
+  c18: [
+    { id: "cc7", authorId: "u4", body: "試合で決めたのすごすぎる", createdAt: "2026-10-01T19:00:00.000Z" },
+  ],
+};
+
 const seedRecruits: RecruitPost[] = [
   {
     id: "r1",
@@ -667,7 +688,7 @@ const seedRecruits: RecruitPost[] = [
 // ストアの形を変えたら STORE_VERSION を上げる。dev サーバーを起動したままコードが
 // 差し替わると古い形のストアが残り、新しい項目が undefined になるため、
 // バージョンが違えば作り直す（ログイン中のセッションと募集は引き継ぐ）。
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 
 interface MockStore {
   version: number;
@@ -692,6 +713,16 @@ interface MockStore {
   /** "viewerKey:clipId" -> 最後に再生を数えた時刻 ms（重複カウント防止） */
   recentViews: Map<string, number>;
   playlists: Playlist[];
+  /** clipId -> コメント（投稿順） */
+  clipComments: Map<string, StoredClipComment[]>;
+}
+
+/** 保存用のクリップコメント。投稿者は ID だけ持ち、表示時に User を引く */
+interface StoredClipComment {
+  id: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
 }
 
 const globalForStore = globalThis as unknown as { __mockStore?: MockStore };
@@ -728,12 +759,20 @@ interface SocialFile {
   /** clipId -> { 時間バケット: 再生数 } */
   viewBuckets: Record<string, Record<string, number>>;
   playlists: Playlist[];
+  /** 無ければ（このキーが無い古いファイル・初回）見本のコメントから始める */
+  clipComments?: Record<string, StoredClipComment[]>;
 }
 
 type SocialState = Pick<
   MockStore,
-  "likes" | "viewTotals" | "viewBuckets" | "playlists"
+  "likes" | "viewTotals" | "viewBuckets" | "playlists" | "clipComments"
 >;
+
+function seedComments(): Map<string, StoredClipComment[]> {
+  return new Map(
+    Object.entries(seedClipComments).map(([clipId, list]) => [clipId, [...list]]),
+  );
+}
 
 function loadSocial(): SocialState {
   const state: SocialState = {
@@ -741,12 +780,16 @@ function loadSocial(): SocialState {
     viewTotals: new Map(),
     viewBuckets: new Map(),
     playlists: [],
+    clipComments: seedComments(),
   };
   let parsed: Partial<SocialFile>;
   try {
     parsed = JSON.parse(readFileSync(SOCIAL_FILE, "utf8"));
   } catch {
     return state;
+  }
+  if (parsed.clipComments) {
+    state.clipComments = new Map(Object.entries(parsed.clipComments));
   }
   for (const like of parsed.likes ?? []) {
     let byUser = state.likes.get(like.clipId);
@@ -792,6 +835,7 @@ function toSocialFile(store: MockStore): SocialFile {
     viewTotals: Object.fromEntries(store.viewTotals),
     viewBuckets,
     playlists: store.playlists,
+    clipComments: Object.fromEntries(store.clipComments),
   };
 }
 
@@ -896,6 +940,7 @@ function withGame(clip: Clip): ClipWithGame {
     ...clip,
     views: clip.views + (store.viewTotals.get(clip.id) ?? 0),
     likes: clip.likes + (store.likes.get(clip.id)?.size ?? 0),
+    commentCount: store.clipComments.get(clip.id)?.length ?? 0,
     game,
   };
 }
@@ -1045,6 +1090,68 @@ export function listLikedClips(userId: string): ClipWithGame[] {
     .filter((x): x is { clip: Clip; at: number } => x.at !== undefined)
     .sort((a, b) => b.at - a.at)
     .map((x) => withGame(x.clip));
+}
+
+// ---- クリップへのコメント ----
+
+function resolveComment(stored: StoredClipComment): Comment | undefined {
+  const author = users.find((u) => u.id === stored.authorId);
+  return author
+    ? { id: stored.id, author, body: stored.body, createdAt: stored.createdAt }
+    : undefined;
+}
+
+/** 新しい順で返す。クリップが無ければ undefined */
+export function listClipComments(clipId: string): Comment[] | undefined {
+  const store = getStore();
+  if (!allClips(store).some((c) => c.id === clipId)) return undefined;
+  return (store.clipComments.get(clipId) ?? [])
+    .map(resolveComment)
+    .filter((c): c is Comment => c !== undefined)
+    .reverse();
+}
+
+export async function addClipComment(
+  clipId: string,
+  author: User,
+  body: string,
+): Promise<Comment | undefined> {
+  const store = getStore();
+  if (!allClips(store).some((c) => c.id === clipId)) return undefined;
+  const stored: StoredClipComment = {
+    id: crypto.randomUUID(),
+    authorId: author.id,
+    body,
+    createdAt: new Date().toISOString(),
+  };
+  let list = store.clipComments.get(clipId);
+  if (!list) {
+    list = [];
+    store.clipComments.set(clipId, list);
+  }
+  list.push(stored);
+  await saveSocial();
+  return resolveComment(stored);
+}
+
+/** コメントを書いた本人か、クリップの投稿者なら削除できる */
+export async function deleteClipComment(
+  clipId: string,
+  commentId: string,
+  userId: string,
+): Promise<"deleted" | "not_found" | "forbidden"> {
+  const store = getStore();
+  const clip = allClips(store).find((c) => c.id === clipId);
+  const list = store.clipComments.get(clipId);
+  const stored = list?.find((c) => c.id === commentId);
+  if (!clip || !list || !stored) return "not_found";
+  if (stored.authorId !== userId && clip.uploader.id !== userId) return "forbidden";
+  store.clipComments.set(
+    clipId,
+    list.filter((c) => c !== stored),
+  );
+  await saveSocial();
+  return "deleted";
 }
 
 // ---- 再生数 ----
