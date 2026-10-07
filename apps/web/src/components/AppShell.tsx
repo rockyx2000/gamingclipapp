@@ -29,6 +29,7 @@ import ThumbUpOutlinedIcon from "@mui/icons-material/ThumbUpOutlined";
 import WhatshotIcon from "@mui/icons-material/Whatshot";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import GroupsIcon from "@mui/icons-material/Groups";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SearchIcon from "@mui/icons-material/Search";
 import VideoCallIcon from "@mui/icons-material/VideoCall";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -63,12 +64,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // スマホ幅では検索欄を畳んでおき、虫眼鏡で開く
+  const [searchOpen, setSearchOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     const q = query.trim();
     router.push(q ? `/?q=${encodeURIComponent(q)}` : "/");
+    setSearchOpen(false);
   };
 
   const handleLogout = async () => {
@@ -118,12 +122,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           <IconButton
             edge="start"
             onClick={() => setMobileOpen(!mobileOpen)}
-            sx={{ display: { md: "none" } }}
+            sx={{ display: { xs: searchOpen ? "none" : "inline-flex", md: "none" } }}
             aria-label="メニュー"
           >
             <MenuIcon />
           </IconButton>
-          <Wordmark />
+          <Box sx={{ display: { xs: searchOpen ? "none" : "block", sm: "block" } }}>
+            <Wordmark />
+          </Box>
 
           <Box
             component="form"
@@ -132,7 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               flexGrow: 1,
               maxWidth: 560,
               mx: "auto",
-              display: "flex",
+              display: { xs: searchOpen ? "flex" : "none", sm: "flex" },
               alignItems: "center",
               bgcolor: "background.paper",
               border: `1px solid ${colors.border}`,
@@ -142,19 +148,42 @@ export function AppShell({ children }: { children: ReactNode }) {
               "&:focus-within": { borderColor: colors.borderStrong },
             }}
           >
+            <IconButton
+              size="small"
+              onClick={() => setSearchOpen(false)}
+              aria-label="検索を閉じる"
+              sx={{ display: { sm: "none" }, mr: 0.5 }}
+            >
+              <ArrowBackIcon />
+            </IconButton>
             <InputBase
               placeholder="クリップを検索"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               sx={{ flexGrow: 1, fontSize: 14 }}
               inputProps={{ "aria-label": "クリップを検索" }}
+              autoFocus={searchOpen}
             />
             <IconButton type="submit" size="small" aria-label="検索">
               <SearchIcon />
             </IconButton>
           </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              display: { xs: searchOpen ? "none" : "flex", sm: "flex" },
+              alignItems: "center",
+              gap: 1,
+              ml: { xs: "auto", sm: 0 },
+            }}
+          >
+            <IconButton
+              onClick={() => setSearchOpen(true)}
+              aria-label="検索を開く"
+              sx={{ display: { sm: "none" } }}
+            >
+              <SearchIcon />
+            </IconButton>
             {user ? (
               <>
                 <Button

@@ -35,7 +35,7 @@ export default async function HomePage(props: PageProps<"/">) {
               急上昇
             </Typography>
             {/* サーバーコンポーネントからは component={Link} を渡せないので Link で包む */}
-            <Link href="/trending" style={{ textDecoration: "none" }}>
+            <Link href="/trending" style={{ textDecoration: "none", color: "inherit" }}>
               <Typography variant="body2" color="text.secondary">
                 すべて見る
               </Typography>
