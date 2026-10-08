@@ -13,7 +13,6 @@ import {
   getClip,
   getPlaylist,
   likedClipIds,
-  listClipComments,
   listClips,
 } from "@/lib/clips";
 import { getCurrentUser } from "@/lib/auth";
@@ -21,6 +20,7 @@ import type { ClipWithGame } from "@/lib/types";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipCard } from "@/components/ClipCard";
 import { ClipComments } from "@/components/ClipComments";
+import { ClipTags } from "@/components/ClipTags";
 import { LikeButton } from "@/components/LikeButton";
 import { PlaylistPanel } from "@/components/PlaylistPanel";
 import { SaveButton } from "@/components/SaveButton";
@@ -117,13 +117,19 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
             <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap" }}>
               {clip.description}
             </Typography>
+            <ClipTags
+              key={clip.id}
+              clipId={clip.id}
+              uploaderId={clip.uploader.id}
+              initialTags={clip.tags ?? []}
+            />
           </Paper>
           <Box sx={{ mt: 3 }}>
             <ClipComments
               key={clip.id}
               clipId={clip.id}
               uploaderId={clip.uploader.id}
-              initialComments={(await listClipComments(clip.id)) ?? []}
+              initialCount={clip.commentCount}
             />
           </Box>
         </Grid>

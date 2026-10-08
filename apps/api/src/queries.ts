@@ -4,6 +4,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-o
 import type { ClipWithGame, Game, GameGenre } from "@gamingclipapp/shared";
 import type { Db } from "./db/client";
 import { clips, games, users } from "./db/schema";
+import { listTags } from "./tags";
 
 // LIKE のワイルドカードとして扱われる文字を、ただの文字として検索する
 function escapeLike(value: string): string {
@@ -131,6 +132,12 @@ export async function listClips(db: Db, filter: ClipFilter = {}): Promise<ClipWi
 export async function getClip(db: Db, id: string): Promise<ClipWithGame | undefined> {
   const [row] = await selectClips(db, eq(clips.id, id)).limit(1);
   return row ? toClip(row) : undefined;
+}
+
+/** 詳細用。映っているユーザー（タグ）も付けて返す */
+export async function getClipDetail(db: Db, id: string): Promise<ClipWithGame | undefined> {
+  const clip = await getClip(db, id);
+  return clip && { ...clip, tags: await listTags(db, id) };
 }
 
 /** 指定した ID のクリップを、渡した順に返す（存在しない ID は飛ばす） */

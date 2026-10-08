@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import type { PlaylistWithClips } from "@/lib/types";
 import { formatDuration } from "@/lib/format";
 import { colors, displaySx } from "@/theme";
+import { HoverPreview } from "./HoverPreview";
 
 interface Props {
   playlist: PlaylistWithClips;
@@ -65,17 +66,14 @@ export function PlaylistPanel({ playlist, currentId }: Props) {
               >
                 {current ? "▶" : i + 1}
               </Typography>
-              <Box
+              <HoverPreview
+                src={clip.videoUrl}
+                poster={clip.thumbnailUrl}
                 sx={{
-                  position: "relative",
                   width: 96,
                   flexShrink: 0,
                   aspectRatio: "16 / 9",
                   borderRadius: 0.5,
-                  bgcolor: "#000",
-                  backgroundImage: `url(${clip.thumbnailUrl})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
                 }}
               >
                 <Box
@@ -94,7 +92,7 @@ export function PlaylistPanel({ playlist, currentId }: Props) {
                 >
                   {formatDuration(clip.durationSec)}
                 </Box>
-              </Box>
+              </HoverPreview>
               <Box sx={{ minWidth: 0 }}>
                 <Typography
                   variant="body2"

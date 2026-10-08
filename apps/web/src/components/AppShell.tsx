@@ -2,7 +2,7 @@
 
 // アプリ全体の共通レイアウト（ヘッダー + サイドバー）
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import AppBar from "@mui/material/AppBar";
@@ -12,7 +12,6 @@ import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
-import InputBase from "@mui/material/InputBase";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -29,13 +28,12 @@ import ThumbUpOutlinedIcon from "@mui/icons-material/ThumbUpOutlined";
 import WhatshotIcon from "@mui/icons-material/Whatshot";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import GroupsIcon from "@mui/icons-material/Groups";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SearchIcon from "@mui/icons-material/Search";
 import VideoCallIcon from "@mui/icons-material/VideoCall";
 import MenuIcon from "@mui/icons-material/Menu";
 import { useAuth } from "./AuthProvider";
+import { SearchBox } from "./SearchBox";
 import { Wordmark } from "./Wordmark";
-import { colors } from "@/theme";
 
 const DRAWER_WIDTH = 220;
 
@@ -63,17 +61,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [query, setQuery] = useState("");
   // スマホ幅では検索欄を畳んでおき、虫眼鏡で開く
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-
-  const handleSearch = (e: FormEvent) => {
-    e.preventDefault();
-    const q = query.trim();
-    router.push(q ? `/?q=${encodeURIComponent(q)}` : "/");
-    setSearchOpen(false);
-  };
 
   const handleLogout = async () => {
     setMenuAnchor(null);
@@ -131,43 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Wordmark />
           </Box>
 
-          <Box
-            component="form"
-            onSubmit={handleSearch}
-            sx={{
-              flexGrow: 1,
-              maxWidth: 560,
-              mx: "auto",
-              display: { xs: searchOpen ? "flex" : "none", sm: "flex" },
-              alignItems: "center",
-              bgcolor: "background.paper",
-              border: `1px solid ${colors.border}`,
-              borderRadius: 1,
-              px: 1.5,
-              py: 0.25,
-              "&:focus-within": { borderColor: colors.borderStrong },
-            }}
-          >
-            <IconButton
-              size="small"
-              onClick={() => setSearchOpen(false)}
-              aria-label="検索を閉じる"
-              sx={{ display: { sm: "none" }, mr: 0.5 }}
-            >
-              <ArrowBackIcon />
-            </IconButton>
-            <InputBase
-              placeholder="クリップを検索"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              sx={{ flexGrow: 1, fontSize: 14 }}
-              inputProps={{ "aria-label": "クリップを検索" }}
-              autoFocus={searchOpen}
-            />
-            <IconButton type="submit" size="small" aria-label="検索">
-              <SearchIcon />
-            </IconButton>
-          </Box>
+          <SearchBox searchOpen={searchOpen} onClose={() => setSearchOpen(false)} />
 
           <Box
             sx={{

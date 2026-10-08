@@ -459,6 +459,7 @@ function Feed({ clips, startId, likedIds, listId }: Props) {
           onClose={() => setCommentClip(null)}
           clipId={commentClip.id}
           uploaderId={commentClip.uploader.id}
+          initialCount={commentCounts[commentClip.id] ?? commentClip.commentCount}
           onCountChange={(count) =>
             setCommentCounts((prev) => ({ ...prev, [commentClip.id]: count }))
           }

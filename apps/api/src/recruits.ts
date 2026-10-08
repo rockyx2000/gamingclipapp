@@ -1,9 +1,18 @@
 // メンバー募集の読み取り
 
-import { asc, desc, eq, inArray } from "drizzle-orm";
-import type { Comment, RecruitStatus, RecruitWithGame, User } from "@gamingclipapp/shared";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import {
+  COMMENTS_PAGE_SIZE,
+  type Comment,
+  type CommentPage,
+  type RecruitStatus,
+  type RecruitWithGame,
+  type User,
+} from "@gamingclipapp/shared";
 import type { Db } from "./db/client";
 import { games, recruitComments, recruitPosts, users } from "./db/schema";
+import { beforeCursor, encodeCursor, type CommentCursor } from "./comment-page";
+import { findUsersByIds, resolveMentions } from "./mentions";
 import { getGame, listGames } from "./queries";
 
 const authorColumns = {
@@ -38,6 +47,7 @@ async function selectPosts(db: Db, where: ReturnType<typeof eq> | undefined): Pr
       id: recruitComments.id,
       body: recruitComments.body,
       createdAt: recruitComments.createdAt,
+      mentions: recruitComments.mentions,
       author: authorColumns,
     })
     .from(recruitComments)
@@ -51,6 +61,7 @@ async function selectPosts(db: Db, where: ReturnType<typeof eq> | undefined): Pr
     .orderBy(asc(recruitComments.createdAt), asc(recruitComments.id));
 
   const gameById = new Map((await listGames(db)).map((g) => [g.id, g]));
+  const mentioned = await findUsersByIds(db, commentRows.flatMap((c) => c.mentions));
   const result: RecruitWithGame[] = [];
   for (const row of rows) {
     const game = gameById.get(row.gameId);
@@ -62,6 +73,7 @@ async function selectPosts(db: Db, where: ReturnType<typeof eq> | undefined): Pr
         author: c.author,
         body: c.body,
         createdAt: c.createdAt.toISOString(),
+        mentions: c.mentions.flatMap((id) => mentioned.get(id) ?? []),
       }));
     result.push({
       id: row.id,
@@ -132,7 +144,54 @@ export async function addRecruitComment(
     .from(recruitPosts)
     .where(eq(recruitPosts.id, postId));
   if (!post) return undefined;
+  const mentions = await resolveMentions(db, body);
   const comment = { id: crypto.randomUUID(), body, createdAt: new Date() };
-  await db.insert(recruitComments).values({ ...comment, postId, authorId: author.id });
-  return { ...comment, author, createdAt: comment.createdAt.toISOString() };
+  await db
+    .insert(recruitComments)
+    .values({ ...comment, postId, authorId: author.id, mentions: mentions.map((u) => u.id) });
+  return { ...comment, author, createdAt: comment.createdAt.toISOString(), mentions };
+}
+
+/** 新しい順に 1 ページ分。募集が無ければ undefined */
+export async function listRecruitComments(
+  db: Db,
+  postId: string,
+  options: { limit?: number; cursor?: CommentCursor } = {},
+): Promise<CommentPage | undefined> {
+  const [post] = await db
+    .select({ id: recruitPosts.id })
+    .from(recruitPosts)
+    .where(eq(recruitPosts.id, postId));
+  if (!post) return undefined;
+  const limit = options.limit ?? COMMENTS_PAGE_SIZE;
+  const rows = await db
+    .select({
+      id: recruitComments.id,
+      body: recruitComments.body,
+      createdAt: recruitComments.createdAt,
+      mentions: recruitComments.mentions,
+      author: authorColumns,
+    })
+    .from(recruitComments)
+    .innerJoin(users, eq(recruitComments.authorId, users.id))
+    .where(
+      and(
+        eq(recruitComments.postId, postId),
+        beforeCursor(recruitComments.createdAt, recruitComments.id, options.cursor),
+      ),
+    )
+    .orderBy(desc(recruitComments.createdAt), desc(recruitComments.id))
+    .limit(limit + 1);
+  const page = rows.slice(0, limit);
+  const mentioned = await findUsersByIds(db, page.flatMap((r) => r.mentions));
+  return {
+    comments: page.map((r) => ({
+      id: r.id,
+      author: r.author,
+      body: r.body,
+      createdAt: r.createdAt.toISOString(),
+      mentions: r.mentions.flatMap((id) => mentioned.get(id) ?? []),
+    })),
+    nextCursor: rows.length > limit ? encodeCursor(page[page.length - 1]) : null,
+  };
 }

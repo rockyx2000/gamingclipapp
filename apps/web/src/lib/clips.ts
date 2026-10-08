@@ -5,7 +5,6 @@
 import { apiGet } from "./api";
 import type {
   ClipWithGame,
-  Comment,
   PlaylistWithClips,
   RankedClip,
   RankingPeriod,
@@ -33,14 +32,6 @@ export async function listClips(filter: ClipFilter = {}): Promise<ClipWithGame[]
 export async function getClip(id: string): Promise<ClipWithGame | undefined> {
   const { status, body } = await apiGet<{ clip: ClipWithGame }>(`/api/clips/${encodeURIComponent(id)}`);
   return status === 404 ? undefined : body.clip;
-}
-
-/** 新しい順。クリップが無ければ undefined */
-export async function listClipComments(clipId: string): Promise<Comment[] | undefined> {
-  const { status, body } = await apiGet<{ comments: Comment[] }>(
-    `/api/clips/${encodeURIComponent(clipId)}/comments`,
-  );
-  return status === 404 ? undefined : body.comments;
 }
 
 export interface RankingOptions {

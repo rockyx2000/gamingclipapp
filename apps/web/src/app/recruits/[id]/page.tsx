@@ -55,7 +55,7 @@ export default async function RecruitDetailPage(
       </Typography>
 
       <Divider sx={{ my: 3 }} />
-      <CommentSection recruitId={recruit.id} comments={recruit.comments} />
+      <CommentSection recruitId={recruit.id} initialCount={recruit.comments.length} />
     </Paper>
   );
 }

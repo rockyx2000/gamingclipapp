@@ -91,9 +91,11 @@ export const clipComments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    /** 本文の @ユーザー名 で呼ばれたユーザーの ID（実在するものだけ） */
+    mentions: text("mentions").array().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
-  (t) => [index("clip_comments_clip_idx").on(t.clipId)],
+  (t) => [index("clip_comments_clip_idx").on(t.clipId, t.createdAt)],
 );
 
 /**
@@ -180,9 +182,11 @@ export const recruitComments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    /** 本文の @ユーザー名 で呼ばれたユーザーの ID（実在するものだけ） */
+    mentions: text("mentions").array().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
-  (t) => [index("recruit_comments_post_idx").on(t.postId)],
+  (t) => [index("recruit_comments_post_idx").on(t.postId, t.createdAt)],
 );
 
 /**
@@ -199,4 +203,19 @@ export const clipViewDedupe = pgTable(
     lastAt: timestamp("last_at", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.viewerKey, t.clipId] }), index("clip_view_dedupe_last_idx").on(t.lastAt)],
+);
+
+/** クリップに映っているユーザーのタグ付け。投稿者が付け、付けられた本人も外せる */
+export const clipTags = pgTable(
+  "clip_tags",
+  {
+    clipId: text("clip_id")
+      .notNull()
+      .references(() => clips.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.clipId, t.userId] }), index("clip_tags_user_idx").on(t.userId)],
 );

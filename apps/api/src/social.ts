@@ -1,9 +1,11 @@
 // いいね・コメントの読み取り
 
 import { and, desc, eq, inArray } from "drizzle-orm";
-import type { ClipWithGame, Comment } from "@gamingclipapp/shared";
+import { COMMENTS_PAGE_SIZE, type ClipWithGame, type CommentPage } from "@gamingclipapp/shared";
 import type { Db } from "./db/client";
 import { clipComments, clipLikes, clips, users } from "./db/schema";
+import { beforeCursor, encodeCursor, type CommentCursor } from "./comment-page";
+import { findUsersByIds, userColumns } from "./mentions";
 import { listClipsByIds } from "./queries";
 
 /** userId がいいねしたクリップ（いいねが新しい順） */
@@ -30,25 +32,39 @@ export async function likedClipIds(db: Db, userId: string, clipIds: string[]): P
   return clipIds.filter((id) => liked.has(id));
 }
 
-/** 新しい順。クリップが無ければ undefined */
-export async function listClipComments(db: Db, clipId: string): Promise<Comment[] | undefined> {
+/** 新しい順に 1 ページ分。クリップが無ければ undefined */
+export async function listClipComments(
+  db: Db,
+  clipId: string,
+  options: { limit?: number; cursor?: CommentCursor } = {},
+): Promise<CommentPage | undefined> {
   const [clip] = await db.select({ id: clips.id }).from(clips).where(eq(clips.id, clipId));
   if (!clip) return undefined;
+  const limit = options.limit ?? COMMENTS_PAGE_SIZE;
   const rows = await db
     .select({
       id: clipComments.id,
       body: clipComments.body,
       createdAt: clipComments.createdAt,
-      author: {
-        id: users.id,
-        username: users.username,
-        displayName: users.displayName,
-        avatarUrl: users.avatarUrl,
-      },
+      mentions: clipComments.mentions,
+      author: userColumns,
     })
     .from(clipComments)
     .innerJoin(users, eq(clipComments.authorId, users.id))
-    .where(eq(clipComments.clipId, clipId))
-    .orderBy(desc(clipComments.createdAt), desc(clipComments.id));
-  return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+    .where(and(eq(clipComments.clipId, clipId), beforeCursor(clipComments.createdAt, clipComments.id, options.cursor)))
+    .orderBy(desc(clipComments.createdAt), desc(clipComments.id))
+    .limit(limit + 1);
+
+  const page = rows.slice(0, limit);
+  const mentioned = await findUsersByIds(db, page.flatMap((r) => r.mentions));
+  return {
+    comments: page.map((r) => ({
+      id: r.id,
+      author: r.author,
+      body: r.body,
+      createdAt: r.createdAt.toISOString(),
+      mentions: r.mentions.flatMap((id) => mentioned.get(id) ?? []),
+    })),
+    nextCursor: rows.length > limit ? encodeCursor(page[page.length - 1]) : null,
+  };
 }

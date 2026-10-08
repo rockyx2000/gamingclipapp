@@ -38,13 +38,18 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 |---|---|---|
 | GET | `/api/healthz` | ヘルスチェック（K8s プローブ用） |
 | GET | `/api/clips?game=&q=` | クリップ一覧（フィルタ可） |
-| POST | `/api/clips` | クリップ投稿（要ログイン、multipart/form-data、`durationSec` は 60 以下） |
+| POST | `/api/clips` | クリップ投稿（要ログイン、multipart/form-data、`durationSec` は 60 以下、`tags` はユーザー名の JSON 配列） |
 | GET | `/api/media/:clipId/:file` | アップロードした動画・サムネイルの配信（Range 対応） |
 | GET | `/api/clips/:id` | クリップ詳細 |
 | PUT / DELETE | `/api/clips/:id/like` | いいねする / 外す（要ログイン、冪等。`{ liked, likes }` を返す） |
 | POST | `/api/clips/:id/view` | 再生を 1 回記録（ログイン不要、同じ視聴者の 30 分以内の重複は数えない） |
-| GET | `/api/clips/:id/comments` | コメント一覧（新しい順） |
-| POST | `/api/clips/:id/comments` | コメント投稿（要ログイン、`{ body }`、500 文字以内） |
+| GET | `/api/clips/:id/comments?limit=&cursor=` | コメント一覧（新しい順、20 件ずつ。`{ comments, nextCursor }`） |
+| POST | `/api/clips/:id/comments` | コメント投稿（要ログイン、`{ body }`、500 文字以内。本文の `@ユーザー名` は `mentions` に解決して返す） |
+| PUT | `/api/clips/:id/tags` | 映っているユーザーのタグを入れ替える（投稿者だけ、`{ usernames }`） |
+| DELETE | `/api/clips/:id/tags/:userId` | タグを外す（投稿者か、タグ付けされた本人） |
+| GET | `/api/search/suggest?q=` | 検索サジェスト（`{ games, clips }`、各 5 件） |
+| GET | `/api/users/search?q=` | ユーザー検索（`@` メンション・タグ付けの候補。要ログイン） |
+| GET | `/api/recruits/:id/comments?limit=&cursor=` | 募集のコメント一覧（クリップと同じ形） |
 | DELETE | `/api/clips/:id/comments/:commentId` | コメント削除（書いた本人かクリップの投稿者） |
 | GET | `/api/ranking?period=&game=` | 再生数ランキング（`period` は `day` / `week` / `month` / `all`） |
 | GET | `/api/trending?game=` | 急上昇 |
@@ -135,6 +140,39 @@ playlists / playlist_clips (position で再生順)
 - **プレイリスト再生**: `/clips/:id?list=<プレイリスト ID>` で開くと、PC は右側に一覧を出し
   最後まで見たら次のクリップへ進む。スマホはプレイリストの順にスワイプする
 - **制限事項**: Cookie を消せば再生を数え直せる。本番では IP やログインユーザーも合わせて判定する
+
+## 検索サジェスト・コメント欄・メンション・タグ付け・ホバー再生
+
+- **検索サジェスト（`SearchBox`）**: ヘッダーの検索欄に入力すると、200ms 止まってから
+  `GET /api/search/suggest?q=` を呼び、ゲーム名とクリップのタイトルを候補に出す（前方一致が先、
+  各 5 件。`%` や `_` はただの文字として検索する）。↑↓ で候補を移動、Enter で開く、Esc で閉じる。
+  候補を選ばずに Enter ならこれまでどおりキーワード検索（`/?q=`）。古い応答は捨てる
+  （`useDebouncedFetch`）
+- **コメント欄の非同期化（`CommentThread`）**: クリップと募集で共用する。
+  ページの表示を待たせないよう、視聴ページはコメントを読み込まずに描画し、開いたあとにブラウザから
+  1 ページ目（20 件）を読む（読み込み中はスケルトン）。続きは「もっと見る」で、
+  `(created_at, id)` のカーソルで読む（新しいコメントが増えても、ずれたり重複したりしない）。
+  投稿と削除は API の返事を待たずに画面へ反映し、失敗したら元に戻す（書いた文は入力欄に返す）。
+  ページの再読み込み（`router.refresh()`）はしない。募集のコメントも同じ作りになり、
+  新しい順の一覧になった（以前は古い順）。他の人の新しいコメントを自動で取り込む処理（ポーリング）は無い
+- **メンション**: コメントの入力欄で `@` に続けて打つと、ユーザーの候補が出る（`MentionTextField`、
+  `GET /api/users/search`）。投稿時に api が本文の `@ユーザー名` を解釈し、実在するユーザーだけを
+  `mentions`（ユーザー ID）に保存して、`mentions: User[]` として返す（1 コメント 10 人まで、
+  大文字小文字は区別しない）。表示（`CommentBody`）は、`mentions` にある `@名前` だけを強調し、
+  実在しない `@xxx` やメールアドレスの `@` はただの文字のまま。
+  **通知は無い**（呼ばれた人に知らせる仕組みは未実装）。プロフィールページも無いので、リンクにはしていない
+- **タグ付け（映っているユーザー）**: 投稿画面の「映っているユーザー」で、ユーザーを検索して選ぶ
+  （10 人まで、自分は除く。`UserPicker`）。`clip_tags` に保存し、クリップのページ（PC）に
+  「映っているユーザー」として出す（`ClipTags`、詳細の `GET /api/clips/:id` だけが `tags` を返す）。
+  **タグは投稿者が付け、付けられた本人も外せる**（望まないタグを残さないため）。投稿者はタグを入れ替える
+  API（`PUT /api/clips/:id/tags`）も使えるが、投稿後にタグを編集する画面はまだ無い
+- **サムネイルのホバー再生（`HoverPreview`）**: クリップカード・一覧の行・プレイリストの一覧で、
+  サムネイルにマウスを乗せて 350ms たつと、動画の最初の 5 秒を無音で再生する。再生が始まったら
+  サムネイルと入れ替え、5 秒たつ（または読み込みに失敗する）とサムネイルに戻る。外してもう一度乗せると
+  頭から再生する。通り過ぎただけでは読み込まない。マウスのない端末（`hover: hover` でない）と、
+  動きを減らす設定（`prefers-reduced-motion`）では動かさない。スマホのフィードには入れていない
+- **既知の制限**: 開発用シードのクリップの動画（`commondatastorage.googleapis.com/gtv-videos-bucket/sample/`）は、
+  配布元が 403 を返すため再生できない（ホバー再生も視聴ページも動かない）。アップロードしたクリップは動く
 
 ## 動画のアップロードと保存
 

@@ -16,13 +16,17 @@ import Typography from "@mui/material/Typography";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { formatTimecode } from "@/lib/video-edit";
 import { displaySx } from "@/theme";
-import type { Game } from "@/lib/types";
+import { MAX_CLIP_TAGS, type Game, type User } from "@/lib/types";
 import { gameMenuItems } from "@/components/gameMenuItems";
+import { useAuth } from "@/components/AuthProvider";
+import { UserPicker } from "@/components/UserPicker";
 
 export interface ClipDetails {
   title: string;
   description: string;
   gameId: string;
+  /** クリップに映っているユーザー（タグ付け） */
+  tags: User[];
 }
 
 /** サムネイルとして受け付ける画像 */
@@ -79,6 +83,7 @@ export function DetailsStep({
   onPickFrame,
   onPickImage,
 }: Props) {
+  const { user } = useAuth();
   // つまみを動かしている間は手元の値で追従し、離したときだけコマを切り出す。
   // まだ触っていない間は、実際に切り出された位置（frameTime）に合わせておく。
   const [dragTime, setDragTime] = useState<number | null>(null);
@@ -153,6 +158,15 @@ export function DetailsStep({
           >
             {gameMenuItems(games, (g) => g.id)}
           </TextField>
+          <UserPicker
+            label="映っているユーザー（任意）"
+            helperText={`タグ付けすると、クリップのページに表示されます（${MAX_CLIP_TAGS} 人まで）。タグは付けられた本人も外せます`}
+            value={value.tags}
+            onChange={(tags) => onChange({ ...value, tags })}
+            max={MAX_CLIP_TAGS}
+            excludeId={user?.id}
+            disabled={disabled}
+          />
         </Stack>
       </Grid>
 
