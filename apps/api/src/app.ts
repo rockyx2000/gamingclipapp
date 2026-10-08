@@ -6,7 +6,7 @@ import { getCookie, setCookie } from "hono/cookie";
 import { logger } from "hono/logger";
 import { sql } from "drizzle-orm";
 import type { Db } from "./db/client";
-import { getClipDetail, getGame, listClips, listGames } from "./queries";
+import { getClip, getGame, listClips, listGames } from "./queries";
 import { getPlaylist, listPlaylistsByOwner } from "./playlists";
 import { isRankingPeriod, listRanking, listTrending } from "./ranking";
 import { addRecruit, addRecruitComment, getRecruit, listRecruitComments, listRecruits } from "./recruits";
@@ -86,7 +86,7 @@ export function createApp(db: Db) {
 
   // GET /api/clips/:id
   app.get("/api/clips/:id", async (c) => {
-    const clip = await getClipDetail(db, c.req.param("id"));
+    const clip = await getClip(db, c.req.param("id"));
     if (!clip) return c.json({ error: "クリップが見つかりません" }, 404);
     return c.json({ clip });
   });
@@ -317,11 +317,13 @@ export function createApp(db: Db) {
     return c.body(null, 204);
   });
 
-  // PUT /api/clips/:id/tags  { usernames: [...] } でタグを入れ替える（投稿者だけ）
+  // PUT /api/clips/:id/tags  { tags: [{ username, x, y }] } でタグを入れ替える（投稿者だけ）
   app.put("/api/clips/:id/tags", async (c) => {
     const user = await requireUser(db, c);
-    const { usernames } = await readJsonObject(c);
-    return c.json({ tags: await setTags(db, c.req.param("id"), user.id, usernames) });
+    const { tags } = await readJsonObject(c);
+    // tags の付け忘れ（や旧形式のキー）で、黙って全タグが消えないようにする
+    if (!Array.isArray(tags)) throw new HttpError("tags に配列を指定してください", 400);
+    return c.json({ tags: await setTags(db, c.req.param("id"), user.id, tags) });
   });
 
   // DELETE /api/clips/:id/tags/:userId  タグを外す（投稿者か、タグ付けされた本人）

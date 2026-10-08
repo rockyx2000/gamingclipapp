@@ -9,6 +9,7 @@ import {
   integer,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
@@ -205,7 +206,7 @@ export const clipViewDedupe = pgTable(
   (t) => [primaryKey({ columns: [t.viewerKey, t.clipId] }), index("clip_view_dedupe_last_idx").on(t.lastAt)],
 );
 
-/** クリップに映っているユーザーのタグ付け。投稿者が付け、付けられた本人も外せる */
+/** クリップの映像に付けたユーザーのタグ（位置つき）。投稿者が付け、付けられた本人も外せる */
 export const clipTags = pgTable(
   "clip_tags",
   {
@@ -215,6 +216,9 @@ export const clipTags = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    /** 映像のコマに対する位置の割合（0〜1、左上が原点） */
+    x: real("x").notNull().default(0.5),
+    y: real("y").notNull().default(0.5),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.clipId, t.userId] }), index("clip_tags_user_idx").on(t.userId)],

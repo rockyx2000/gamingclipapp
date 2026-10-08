@@ -1,6 +1,6 @@
 "use client";
 
-// クリップに映っているユーザー（投稿者がタグ付けしたもの）の表示。
+// クリップにタグ付けされたユーザーの一覧（映像の上の札とは別に、ページにも名前を並べる）。
 // タグは、付けられた本人と投稿者が外せる（本人が望まないタグを残さないため）。
 
 import { useState } from "react";
@@ -9,13 +9,13 @@ import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import type { User } from "@/lib/types";
+import type { ClipTag, User } from "@/lib/types";
 import { useAuth } from "./AuthProvider";
 
 interface Props {
   clipId: string;
   uploaderId: string;
-  initialTags: User[];
+  initialTags: ClipTag[];
 }
 
 export function ClipTags({ clipId, uploaderId, initialTags }: Props) {
@@ -43,9 +43,9 @@ export function ClipTags({ clipId, uploaderId, initialTags }: Props) {
     <Stack spacing={1} sx={{ mt: 2 }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
         <Typography variant="caption" color="text.secondary">
-          映っているユーザー
+          タグ付けされたユーザー
         </Typography>
-        {tags.map((tagged) => (
+        {tags.map(({ user: tagged }) => (
           <Chip
             key={tagged.id}
             size="small"

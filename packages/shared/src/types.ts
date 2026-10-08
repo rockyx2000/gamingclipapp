@@ -55,8 +55,8 @@ export interface Clip {
   /** 総いいね数。保存値（シードの初期値）に、ユーザーのいいねを足して返す */
   likes: number;
   createdAt: string;
-  /** 映っているユーザー（投稿者がタグ付けしたもの）。詳細（GET /api/clips/:id）だけが返す */
-  tags?: User[];
+  /** 映像の上に付けられたユーザーのタグ（Instagram のように位置つき） */
+  tags?: ClipTag[];
 }
 
 export interface Comment {
@@ -66,6 +66,23 @@ export interface Comment {
   createdAt: string;
   /** 本文の @ユーザー名 で呼ばれたユーザー（実在するものだけ。api が返す） */
   mentions?: User[];
+}
+
+/**
+ * クリップの映像に付けたユーザーのタグ。位置は映像のコマに対する割合（0〜1、左上が原点）で、
+ * 画面の大きさや黒帯の有無に関係なく、同じ人の上に出せる。
+ */
+export interface ClipTag {
+  user: User;
+  x: number;
+  y: number;
+}
+
+/** 投稿・更新で送るタグ（ユーザーは ID ではなくユーザー名で指定する） */
+export interface ClipTagInput {
+  username: string;
+  x: number;
+  y: number;
 }
 
 /** ユーザー名の形式。@メンションとタグ付けの検索・解釈に使う */

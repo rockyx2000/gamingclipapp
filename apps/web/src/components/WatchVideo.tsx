@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
+import type { ClipTag } from "@/lib/types";
 import { VideoPlayer } from "./VideoPlayer";
 import { useRecordView } from "./useRecordView";
 
@@ -19,9 +20,11 @@ interface Props {
   poster: string;
   /** 再生し終えたら移動する URL（プレイリストの次のクリップ） */
   nextHref?: string;
+  /** 映像の上に付けられたユーザーのタグ */
+  tags?: ClipTag[];
 }
 
-export function WatchVideo({ clipId, src, poster, nextHref }: Props) {
+export function WatchVideo({ clipId, src, poster, nextHref, tags }: Props) {
   const theme = useTheme();
   const router = useRouter();
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
@@ -37,6 +40,7 @@ export function WatchVideo({ clipId, src, poster, nextHref }: Props) {
         autoPlay={isDesktop}
         onPlay={() => recordView(clipId)}
         onEnded={nextHref ? () => router.push(nextHref) : undefined}
+        tags={tags}
       />
     </Box>
   );

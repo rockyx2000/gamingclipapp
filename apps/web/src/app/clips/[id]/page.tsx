@@ -82,6 +82,7 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
             src={clip.videoUrl}
             poster={clip.thumbnailUrl}
             nextHref={nextHref}
+            tags={clip.tags}
           />
           <Typography variant="h2" sx={{ mt: 2 }}>
             {clip.title}

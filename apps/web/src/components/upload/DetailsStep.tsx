@@ -16,17 +16,16 @@ import Typography from "@mui/material/Typography";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { formatTimecode } from "@/lib/video-edit";
 import { displaySx } from "@/theme";
-import { MAX_CLIP_TAGS, type Game, type User } from "@/lib/types";
+import type { ClipTag, Game } from "@/lib/types";
 import { gameMenuItems } from "@/components/gameMenuItems";
-import { useAuth } from "@/components/AuthProvider";
-import { UserPicker } from "@/components/UserPicker";
+import { TagEditor } from "@/components/TagEditor";
 
 export interface ClipDetails {
   title: string;
   description: string;
   gameId: string;
-  /** クリップに映っているユーザー（タグ付け） */
-  tags: User[];
+  /** 映像の上に付けたユーザーのタグ */
+  tags: ClipTag[];
 }
 
 /** サムネイルとして受け付ける画像 */
@@ -83,7 +82,6 @@ export function DetailsStep({
   onPickFrame,
   onPickImage,
 }: Props) {
-  const { user } = useAuth();
   // つまみを動かしている間は手元の値で追従し、離したときだけコマを切り出す。
   // まだ触っていない間は、実際に切り出された位置（frameTime）に合わせておく。
   const [dragTime, setDragTime] = useState<number | null>(null);
@@ -92,23 +90,12 @@ export function DetailsStep({
   return (
     <Grid container spacing={3}>
       <Grid size={{ xs: 12, md: 6 }}>
-        <Box sx={{ bgcolor: "#000", borderRadius: 1, p: 1 }}>
-          <Box
-            component="video"
-            src={previewUrl}
-            controls
-            playsInline
-            controlsList="nodownload noremoteplayback"
-            disablePictureInPicture
-            sx={{
-              display: "block",
-              width: "100%",
-              aspectRatio: "16 / 9",
-              objectFit: "contain",
-              bgcolor: "#000",
-            }}
-          />
-        </Box>
+        <TagEditor
+          previewUrl={previewUrl}
+          value={value.tags}
+          onChange={(tags) => onChange({ ...value, tags })}
+          disabled={disabled}
+        />
         <Stack direction="row" spacing={2} sx={{ mt: 1, alignItems: "baseline" }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
             <Typography component="span" sx={{ ...displaySx, fontSize: 20 }}>
@@ -158,15 +145,6 @@ export function DetailsStep({
           >
             {gameMenuItems(games, (g) => g.id)}
           </TextField>
-          <UserPicker
-            label="映っているユーザー（任意）"
-            helperText={`タグ付けすると、クリップのページに表示されます（${MAX_CLIP_TAGS} 人まで）。タグは付けられた本人も外せます`}
-            value={value.tags}
-            onChange={(tags) => onChange({ ...value, tags })}
-            max={MAX_CLIP_TAGS}
-            excludeId={user?.id}
-            disabled={disabled}
-          />
         </Stack>
       </Grid>
 

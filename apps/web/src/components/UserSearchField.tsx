@@ -1,7 +1,7 @@
 "use client";
 
-// ユーザーを検索して複数選ぶ入力欄（クリップに映っているユーザーのタグ付け用）。
-// 候補は /api/users/search（要ログイン）から取る。
+// ユーザーを 1 人検索して選ぶ入力欄（タグ付けで、映像のクリックした位置に付ける人を選ぶ用）。
+// 候補は /api/users/search（要ログイン）から取る。選んだら onSelect が呼ばれる。
 
 import { useState } from "react";
 import Autocomplete from "@mui/material/Autocomplete";
@@ -15,50 +15,39 @@ import { useDebouncedFetch } from "./useDebouncedFetch";
 const NO_USERS: { users: User[] } = { users: [] };
 
 interface Props {
-  value: User[];
-  onChange: (next: User[]) => void;
-  /** 選べる人数の上限 */
-  max: number;
-  /** 候補に出さないユーザー（自分自身など） */
-  excludeId?: string;
-  label: string;
-  helperText?: string;
-  disabled?: boolean;
+  onSelect: (user: User) => void;
+  /** 候補に出さないユーザー（自分自身や、すでにタグ付けした人） */
+  excludeIds: string[];
+  autoFocus?: boolean;
 }
 
-export function UserPicker({ value, onChange, max, excludeId, label, helperText, disabled }: Props) {
+export function UserSearchField({ onSelect, excludeIds, autoFocus }: Props) {
   const [input, setInput] = useState("");
-  const [open, setOpen] = useState(false);
   const { data, loading } = useDebouncedFetch(
-    open ? `/api/users/search?q=${encodeURIComponent(input.trim())}` : null,
+    `/api/users/search?q=${encodeURIComponent(input.trim())}`,
     NO_USERS,
     150,
   );
-  const options = data.users.filter((u) => u.id !== excludeId);
-  const full = value.length >= max;
+  const options = data.users.filter((u) => !excludeIds.includes(u.id));
 
   return (
     <Autocomplete
-      multiple
-      value={value}
-      onChange={(_, next) => onChange(next)}
+      // 選んだら入力欄は空に戻す（選択済みの値は親が持つ）
+      value={null}
+      onChange={(_, user) => user && onSelect(user)}
       inputValue={input}
-      onInputChange={(_, next, reason) => {
-        if (reason !== "reset") setInput(next);
-      }}
-      open={open}
-      onOpen={() => setOpen(true)}
-      onClose={() => setOpen(false)}
+      onInputChange={(_, next) => setInput(next)}
       options={options}
       loading={loading}
       loadingText="検索中…"
       noOptionsText="該当するユーザーがいません"
+      openOnFocus
       // 絞り込みは api 側で済んでいる
       filterOptions={(x) => x}
       getOptionLabel={(user) => user.displayName}
       isOptionEqualToValue={(a, b) => a.id === b.id}
-      getOptionDisabled={(user) => full && !value.some((v) => v.id === user.id)}
-      disabled={disabled}
+      size="small"
+      sx={{ width: 260 }}
       renderOption={(props, user) => {
         const { key, ...rest } = props;
         return (
@@ -74,12 +63,7 @@ export function UserPicker({ value, onChange, max, excludeId, label, helperText,
         );
       }}
       renderInput={(params) => (
-        <TextField
-          {...params}
-          label={label}
-          placeholder={full ? "" : "名前やユーザー名で検索"}
-          helperText={helperText}
-        />
+        <TextField {...params} autoFocus={autoFocus} placeholder="名前やユーザー名で検索" />
       )}
     />
   );

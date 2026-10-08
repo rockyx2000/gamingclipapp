@@ -337,7 +337,12 @@ export default function UploadPage() {
       form.append("description", details.description);
       form.append("gameId", details.gameId);
       if (details.tags.length > 0) {
-        form.append("tags", JSON.stringify(details.tags.map((u) => u.username)));
+        form.append(
+          "tags",
+          JSON.stringify(
+            details.tags.map((t) => ({ username: t.user.username, x: t.x, y: t.y })),
+          ),
+        );
       }
       form.append("durationSec", String(Math.round(exported.lengthSec)));
 

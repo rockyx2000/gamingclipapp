@@ -32,6 +32,7 @@ import { formatDuration, formatViews } from "@/lib/format";
 import { displaySx } from "@/theme";
 import { Wordmark } from "./Wordmark";
 import { CommentsSheet } from "./CommentsSheet";
+import { TagLayer, TagToggle } from "./TagLayer";
 import { SaveToPlaylistDialog } from "./SaveToPlaylistDialog";
 import { useLike } from "./useLike";
 import { useRecordView } from "./useRecordView";
@@ -63,6 +64,10 @@ function Feed({ clips, startId, likedIds, listId }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [saveClipId, setSaveClipId] = useState<string | null>(null);
   const [commentClip, setCommentClip] = useState<ClipWithGame | null>(null);
+  // 映像の上のタグを出しているクリップ（Instagram と同じく、押したときだけ出す）
+  const [tagsShownFor, setTagsShownFor] = useState<string | null>(null);
+  // タグを黒帯を除いた映像の位置に合わせるための、クリップごとの縦横比（幅 / 高さ）
+  const [aspects, setAspects] = useState<Record<string, number>>({});
   // シートで投稿・削除した後の件数（ボタンの数字に反映する）
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const requireLogin = useRequireLogin();
@@ -247,6 +252,12 @@ function Feed({ clips, startId, likedIds, listId }: Props) {
                 controlsList="nodownload noremoteplayback"
                 disablePictureInPicture
                 onContextMenu={(e: React.MouseEvent) => e.preventDefault()}
+                onLoadedMetadata={(e: React.SyntheticEvent<HTMLVideoElement>) => {
+                  const { videoWidth, videoHeight } = e.currentTarget;
+                  if (videoWidth && videoHeight) {
+                    setAspects((prev) => ({ ...prev, [clip.id]: videoWidth / videoHeight }));
+                  }
+                }}
                 onClick={(e: React.MouseEvent<HTMLVideoElement>) =>
                   togglePlay(e.currentTarget)
                 }
@@ -257,6 +268,10 @@ function Feed({ clips, startId, likedIds, listId }: Props) {
                   bgcolor: "#000",
                 }}
               />
+
+              {tagsShownFor === clip.id && (clip.tags?.length ?? 0) > 0 && (
+                <TagLayer tags={clip.tags ?? []} aspect={aspects[clip.id]} />
+              )}
 
               {isActive && paused && (
                 <Box
@@ -348,6 +363,16 @@ function Feed({ clips, startId, likedIds, listId }: Props) {
                   </IconButton>
                   <Typography variant="caption">保存</Typography>
                 </Stack>
+                {(clip.tags?.length ?? 0) > 0 && (
+                  <Stack sx={{ alignItems: "center" }}>
+                    <TagToggle
+                      count={clip.tags?.length ?? 0}
+                      shown={tagsShownFor === clip.id}
+                      onToggle={() => setTagsShownFor(tagsShownFor === clip.id ? null : clip.id)}
+                    />
+                    <Typography variant="caption">タグ</Typography>
+                  </Stack>
+                )}
                 <Stack sx={{ alignItems: "center" }}>
                   <IconButton
                     onClick={() => handleShare(clip)}

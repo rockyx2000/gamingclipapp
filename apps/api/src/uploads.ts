@@ -11,8 +11,8 @@ import {
 import type { Db } from "./db/client";
 import { clips, clipTags, games } from "./db/schema";
 import { HttpError } from "./errors";
-import { getClipDetail } from "./queries";
-import { resolveTagUsernames } from "./tags";
+import { getClip } from "./queries";
+import { resolveTags } from "./tags";
 import { getStorage } from "./storage";
 
 const mb = (bytes: number) => Math.floor(bytes / 1024 / 1024);
@@ -22,7 +22,8 @@ const mb = (bytes: number) => Math.floor(bytes / 1024 / 1024);
  *   video       動画ファイル（必須。mp4 / webm / mov）
  *   thumbnail   サムネイル画像（任意）
  *   title, description, gameId, durationSec
- *   tags        映っているユーザーのユーザー名の JSON 配列（任意。例: ["hanako_fps"]）
+ *   tags        映像に付けるタグの JSON 配列（任意。例: [{"username":"hanako_fps","x":0.4,"y":0.6}]。
+ *               x, y は映像のコマに対する位置の割合（0〜1）
  * 注意: formData() はファイル全体をメモリに読み込む。Cloudflare R2 へ移すときは、
  * 署名付き URL でブラウザから直接送る方式に切り替える（docs/architecture.md）。
  */
@@ -67,10 +68,10 @@ export async function createClipFromForm(db: Db, form: FormData, uploader: User)
     try {
       rawTags = JSON.parse(tagsField);
     } catch {
-      throw new HttpError("タグ付けするユーザーの指定が不正です", 400);
+      throw new HttpError("タグの指定が不正です", 400);
     }
   }
-  const tagged = await resolveTagUsernames(db, rawTags, uploader.id);
+  const tagged = await resolveTags(db, rawTags, uploader.id);
 
   const storage = getStorage();
   const id = crypto.randomUUID();
@@ -102,7 +103,7 @@ export async function createClipFromForm(db: Db, form: FormData, uploader: User)
         createdAt: new Date(),
       });
       if (tagged.length > 0) {
-        await tx.insert(clipTags).values(tagged.map((u) => ({ clipId: id, userId: u.id })));
+        await tx.insert(clipTags).values(tagged.map((t) => ({ clipId: id, ...t })));
       }
     });
   } catch (err) {
@@ -111,7 +112,7 @@ export async function createClipFromForm(db: Db, form: FormData, uploader: User)
     console.error("クリップの保存に失敗しました", err);
     throw new HttpError("クリップの保存に失敗しました", 500);
   }
-  const clip = await getClipDetail(db, id);
+  const clip = await getClip(db, id);
   if (!clip) throw new HttpError("クリップの保存に失敗しました", 500);
   return clip;
 }

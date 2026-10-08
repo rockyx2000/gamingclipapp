@@ -4,7 +4,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-o
 import type { ClipWithGame, Game, GameGenre } from "@gamingclipapp/shared";
 import type { Db } from "./db/client";
 import { clips, games, users } from "./db/schema";
-import { listTags } from "./tags";
+import { withTags } from "./tags";
 
 // LIKE のワイルドカードとして扱われる文字を、ただの文字として検索する
 function escapeLike(value: string): string {
@@ -126,24 +126,18 @@ export async function listClips(db: Db, filter: ClipFilter = {}): Promise<ClipWi
     conditions.push(or(ilike(clips.title, pattern), ilike(clips.description, pattern))!);
   }
   const rows = await selectClips(db, and(...conditions));
-  return rows.map(toClip);
+  return withTags(db, rows.map(toClip));
 }
 
 export async function getClip(db: Db, id: string): Promise<ClipWithGame | undefined> {
   const [row] = await selectClips(db, eq(clips.id, id)).limit(1);
-  return row ? toClip(row) : undefined;
-}
-
-/** 詳細用。映っているユーザー（タグ）も付けて返す */
-export async function getClipDetail(db: Db, id: string): Promise<ClipWithGame | undefined> {
-  const clip = await getClip(db, id);
-  return clip && { ...clip, tags: await listTags(db, id) };
+  return row ? (await withTags(db, [toClip(row)]))[0] : undefined;
 }
 
 /** 指定した ID のクリップを、渡した順に返す（存在しない ID は飛ばす） */
 export async function listClipsByIds(db: Db, ids: string[]): Promise<ClipWithGame[]> {
   if (ids.length === 0) return [];
   const rows = await selectClips(db, inArray(clips.id, ids));
-  const byId = new Map(rows.map((r) => [r.id, toClip(r)]));
+  const byId = new Map((await withTags(db, rows.map(toClip))).map((c) => [c.id, c]));
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
