@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { isRankingPeriod, listRanking } from "@/lib/mock-db";
+import { isRankingPeriod } from "@/lib/mock-db";
+import { listRanking } from "@/lib/clips";
 import { getGame, listGames } from "@/lib/games";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipRow } from "@/components/ClipRow";
@@ -22,7 +23,7 @@ export default async function RankingPage(props: PageProps<"/ranking">) {
   const rawGame = typeof searchParams.game === "string" ? searchParams.game : undefined;
   const game = rawGame ? await getGame(rawGame) : undefined;
 
-  const clips = listRanking({ period, gameSlug: game?.slug });
+  const clips = await listRanking({ period, gameSlug: game?.slug });
 
   return (
     <>

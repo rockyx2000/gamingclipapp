@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import { listClips, listTrending } from "@/lib/mock-db";
+import { listClips, listTrending } from "@/lib/clips";
 import { ClipGrid } from "@/components/ClipGrid";
 
 // 投稿が即時反映されるよう常に動的レンダリングにする
@@ -12,7 +12,7 @@ export default async function HomePage(props: PageProps<"/">) {
   const q = typeof searchParams.q === "string" ? searchParams.q : undefined;
 
   if (q) {
-    const results = listClips({ query: q });
+    const results = await listClips({ query: q });
     return (
       <>
         <Typography variant="h2" sx={{ mb: 2 }}>
@@ -23,8 +23,7 @@ export default async function HomePage(props: PageProps<"/">) {
     );
   }
 
-  const clips = listClips();
-  const trending = listTrending({ limit: 4 });
+  const [clips, trending] = await Promise.all([listClips(), listTrending({ limit: 4 })]);
 
   return (
     <>

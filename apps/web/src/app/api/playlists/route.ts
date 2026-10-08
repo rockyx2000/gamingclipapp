@@ -6,9 +6,12 @@ import {
   playlistErrorResponse,
   readJsonObject,
 } from "@/lib/playlist-input";
+import { API_URL } from "@/lib/config";
+import { proxyToApi } from "@/lib/api";
 
 // GET /api/playlists  自分のプレイリスト一覧（要ログイン）
-export async function GET() {
+export async function GET(request: Request) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "ログインが必要です" }, { status: 401 });
@@ -19,6 +22,7 @@ export async function GET() {
 // POST /api/playlists  作成（要ログイン）
 // { title, description?, visibility?: "public" | "private", clipId? }
 export async function POST(request: NextRequest) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "ログインが必要です" }, { status: 401 });

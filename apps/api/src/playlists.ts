@@ -1,9 +1,14 @@
 // プレイリストの読み取り
 
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import type { PlaylistVisibility, PlaylistWithClips } from "@gamingclipapp/shared";
 import type { Db } from "./db/client";
-import { playlistClips, playlists, users } from "./db/schema";
+import { clips, playlistClips, playlists, users } from "./db/schema";
+import { HttpError } from "./errors";
+import {
+  MAX_CLIPS_PER_PLAYLIST,
+  MAX_PLAYLISTS_PER_USER,
+} from "./limits";
 import { listClipsByIds } from "./queries";
 
 const playlistSelect = {
@@ -88,4 +93,157 @@ export async function getPlaylist(
   if (row.visibility === "private" && row.ownerId !== viewerId) return undefined;
   const [playlist] = await resolvePlaylists(db, [row]);
   return playlist;
+}
+
+// ---- 書き込み ----
+
+/** 自分のプレイリストを取る。他人の非公開は存在を漏らさず 404、他人の公開は 403 */
+async function ownedPlaylist(db: Db, id: string, ownerId: string) {
+  const [playlist] = await db.select().from(playlists).where(eq(playlists.id, id));
+  if (!playlist || (playlist.ownerId !== ownerId && playlist.visibility === "private")) {
+    throw new HttpError("プレイリストが見つかりません", 404);
+  }
+  if (playlist.ownerId !== ownerId) throw new HttpError("このプレイリストは編集できません", 403);
+  return playlist;
+}
+
+async function resolved(db: Db, id: string, ownerId: string): Promise<PlaylistWithClips> {
+  const playlist = await getPlaylist(db, id, ownerId);
+  if (!playlist) throw new HttpError("プレイリストが見つかりません", 404);
+  return playlist;
+}
+
+export interface NewPlaylistInput {
+  ownerId: string;
+  title: string;
+  description: string;
+  visibility: PlaylistVisibility;
+  /** 作成と同時に入れるクリップ（視聴中の「保存」から作るとき） */
+  clipId?: string;
+}
+
+export async function createPlaylist(db: Db, input: NewPlaylistInput): Promise<PlaylistWithClips> {
+  const [owned] = await db
+    .select({ n: count() })
+    .from(playlists)
+    .where(eq(playlists.ownerId, input.ownerId));
+  if ((owned?.n ?? 0) >= MAX_PLAYLISTS_PER_USER) {
+    throw new HttpError(`プレイリストは${MAX_PLAYLISTS_PER_USER}個までです`, 400);
+  }
+  if (input.clipId) {
+    const [clip] = await db.select({ id: clips.id }).from(clips).where(eq(clips.id, input.clipId));
+    if (!clip) throw new HttpError("クリップが見つかりません", 404);
+  }
+  const id = crypto.randomUUID();
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx.insert(playlists).values({
+      id,
+      ownerId: input.ownerId,
+      title: input.title,
+      description: input.description,
+      visibility: input.visibility,
+      createdAt: now,
+      updatedAt: now,
+    });
+    if (input.clipId) {
+      await tx.insert(playlistClips).values({ playlistId: id, clipId: input.clipId, position: 0 });
+    }
+  });
+  return resolved(db, id, input.ownerId);
+}
+
+export interface PlaylistPatch {
+  title?: string;
+  description?: string;
+  visibility?: PlaylistVisibility;
+  /** 並べ替え。今入っているクリップと同じ集合でなければならない */
+  clipIds?: string[];
+}
+
+export async function updatePlaylist(
+  db: Db,
+  id: string,
+  ownerId: string,
+  patch: PlaylistPatch,
+): Promise<PlaylistWithClips> {
+  await ownedPlaylist(db, id, ownerId);
+  await db.transaction(async (tx) => {
+    if (patch.clipIds) {
+      const current = await tx
+        .select({ clipId: playlistClips.clipId })
+        .from(playlistClips)
+        .where(eq(playlistClips.playlistId, id));
+      const a = current.map((r) => r.clipId).sort().join(",");
+      const b = [...patch.clipIds].sort().join(",");
+      if (a !== b) throw new HttpError("並べ替えでは追加・削除できません", 400);
+      for (const [position, clipId] of patch.clipIds.entries()) {
+        await tx
+          .update(playlistClips)
+          .set({ position })
+          .where(and(eq(playlistClips.playlistId, id), eq(playlistClips.clipId, clipId)));
+      }
+    }
+    await tx
+      .update(playlists)
+      .set({
+        ...(patch.title !== undefined && { title: patch.title }),
+        ...(patch.description !== undefined && { description: patch.description }),
+        ...(patch.visibility !== undefined && { visibility: patch.visibility }),
+        updatedAt: new Date(),
+      })
+      .where(eq(playlists.id, id));
+  });
+  return resolved(db, id, ownerId);
+}
+
+export async function deletePlaylist(db: Db, id: string, ownerId: string): Promise<void> {
+  await ownedPlaylist(db, id, ownerId);
+  await db.delete(playlists).where(eq(playlists.id, id));
+}
+
+/** 末尾に追加する。追加済みなら何もしない */
+export async function addClipToPlaylist(
+  db: Db,
+  id: string,
+  ownerId: string,
+  clipId: string,
+): Promise<PlaylistWithClips> {
+  await ownedPlaylist(db, id, ownerId);
+  const [clip] = await db.select({ id: clips.id }).from(clips).where(eq(clips.id, clipId));
+  if (!clip) throw new HttpError("クリップが見つかりません", 404);
+  await db.transaction(async (tx) => {
+    const members = await tx
+      .select({ clipId: playlistClips.clipId, position: playlistClips.position })
+      .from(playlistClips)
+      .where(eq(playlistClips.playlistId, id));
+    if (members.some((m) => m.clipId === clipId)) return;
+    if (members.length >= MAX_CLIPS_PER_PLAYLIST) {
+      throw new HttpError(`1つのプレイリストに入れられるのは${MAX_CLIPS_PER_PLAYLIST}本までです`, 400);
+    }
+    const next = members.reduce((max, m) => Math.max(max, m.position), -1) + 1;
+    await tx
+      .insert(playlistClips)
+      .values({ playlistId: id, clipId, position: next })
+      .onConflictDoNothing();
+    await tx.update(playlists).set({ updatedAt: new Date() }).where(eq(playlists.id, id));
+  });
+  return resolved(db, id, ownerId);
+}
+
+export async function removeClipFromPlaylist(
+  db: Db,
+  id: string,
+  ownerId: string,
+  clipId: string,
+): Promise<PlaylistWithClips> {
+  await ownedPlaylist(db, id, ownerId);
+  const removed = await db
+    .delete(playlistClips)
+    .where(and(eq(playlistClips.playlistId, id), eq(playlistClips.clipId, clipId)))
+    .returning({ clipId: playlistClips.clipId });
+  if (removed.length > 0) {
+    await db.update(playlists).set({ updatedAt: new Date() }).where(eq(playlists.id, id));
+  }
+  return resolved(db, id, ownerId);
 }

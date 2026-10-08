@@ -9,9 +9,12 @@ import {
   VIDEO_EXTENSIONS,
 } from "@/lib/config";
 import { MAX_CLIP_DURATION_SEC } from "@/lib/types";
+import { API_URL } from "@/lib/config";
+import { proxyToApi } from "@/lib/api";
 
 // GET /api/clips?game=<slug>&q=<検索語>
 export async function GET(request: NextRequest) {
+  if (API_URL) return proxyToApi(request);
   const params = request.nextUrl.searchParams;
   const clips = listClips({
     gameSlug: params.get("game") ?? undefined,
@@ -32,6 +35,7 @@ function badRequest(message: string, status = 400): Response {
 // 注意: request.formData() はファイル全体をメモリに読み込む。本番では署名付き URL で
 // オブジェクトストレージへ直接アップロードする方式に切り替える（docs/architecture.md）。
 export async function POST(request: NextRequest) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return badRequest("ログインが必要です", 401);

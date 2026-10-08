@@ -26,6 +26,11 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 api
 
+# アップロードした動画・サムネイルの保存先。K8s では PersistentVolume を /data にマウントする
+ENV DATA_DIR=/data
+RUN mkdir -p /data && chown api:nodejs /data
+VOLUME ["/data"]
+
 # バンドル済みなので node_modules は要らない。マイグレーションの SQL だけ持ち込む
 COPY --from=builder --chown=api:nodejs /app/apps/api/dist ./dist
 COPY --from=builder --chown=api:nodejs /app/apps/api/drizzle ./drizzle

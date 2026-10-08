@@ -1,12 +1,13 @@
 import { getCurrentUser } from "@/lib/auth";
 import { deleteClipComment } from "@/lib/mock-db";
+import { API_URL } from "@/lib/config";
+import { proxyToApi } from "@/lib/api";
 
 // DELETE /api/clips/:id/comments/:commentId
 // コメントした本人か、クリップの投稿者だけが削除できる
-export async function DELETE(
-  _request: Request,
-  ctx: RouteContext<"/api/clips/[id]/comments/[commentId]">,
-) {
+export async function DELETE(request: Request,
+  ctx: RouteContext<"/api/clips/[id]/comments/[commentId]">,) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "ログインが必要です" }, { status: 401 });
