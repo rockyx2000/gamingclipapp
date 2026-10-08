@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { getGame, isRankingPeriod, listGames, listRanking } from "@/lib/mock-db";
+import { isRankingPeriod, listRanking } from "@/lib/mock-db";
+import { getGame, listGames } from "@/lib/games";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipRow } from "@/components/ClipRow";
 import { GameFilterSelect } from "@/components/GameFilterSelect";
@@ -19,7 +20,7 @@ export default async function RankingPage(props: PageProps<"/ranking">) {
   const rawPeriod = typeof searchParams.period === "string" ? searchParams.period : "day";
   const period = isRankingPeriod(rawPeriod) ? rawPeriod : "day";
   const rawGame = typeof searchParams.game === "string" ? searchParams.game : undefined;
-  const game = rawGame ? getGame(rawGame) : undefined;
+  const game = rawGame ? await getGame(rawGame) : undefined;
 
   const clips = listRanking({ period, gameSlug: game?.slug });
 
@@ -31,7 +32,7 @@ export default async function RankingPage(props: PageProps<"/ranking">) {
         <Typography variant="h2" sx={{ flexGrow: 1 }}>
           再生数ランキング
         </Typography>
-        <GameFilterSelect games={listGames()} value={game?.slug ?? ""} />
+        <GameFilterSelect games={await listGames()} value={game?.slug ?? ""} />
       </Box>
       <PeriodTabs value={period} gameSlug={game?.slug} />
       <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1.5, mb: 1 }}>

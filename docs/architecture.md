@@ -224,14 +224,30 @@ TypeScript 製のバックエンドを `apps/api` に追加する。
 
 ### 進捗
 
-- **済**: `packages/shared`（ドメイン型とシードデータ）、`apps/api` の土台
-  （Hono / Drizzle / PostgreSQL、マイグレーション、シード、`docker-compose.yml`）、
-  読み取り API（`GET /api/games`、`/api/games/:slug`、`/api/clips`、`/api/clips/:id`）、
-  プローブ（`/api/healthz` は DB に触らない、`/api/readyz` は DB 接続まで見る）
-- **未**: 認証、いいね・再生数・コメント・プレイリスト・募集、動画アップロード。
-  `apps/web` はまだモック API を使っており、api は呼んでいない
-- **api と web のモックの差**: api の `commentCount` は、コメントを移すまで常に 0 を返す。
-  `views` / `likes` はシードの初期値のままで、いいね・再生の記録を移したらその集計を足す
+- **済（api）**: 読み取り API は一通り実装した。web のモック API と同じ形・同じ計算で返す
+  - ゲーム・クリップ: `GET /api/games`、`/api/games/:slug`、`/api/clips`、`/api/clips/:id`
+    （`views` / `likes` / `commentCount` は、シードの初期値に記録分を足した現在の数）
+  - `GET /api/clips/:id/comments`（新しい順）
+  - `GET /api/ranking?period=&game=`、`GET /api/trending?game=`（計算式は web のモックと同じ）
+  - `GET /api/recruits?game=`、`/api/recruits/:id`
+  - `GET /api/users`、`GET /api/auth/me`（Cookie `gca_session` を `sessions` テーブルで引く）
+  - 要ログイン: `GET /api/me/likes`、`GET /api/playlists`。`GET /api/playlists/:id` は
+    非公開なら持ち主だけ（他人には 404）。`GET /api/me/liked-clip-ids?ids=` は
+    視聴ページの「いいね済み」表示用（モックにはなく、api で足した）
+  - プローブ: `/api/healthz`（DB に触らない）、`/api/readyz`（DB 接続まで見る）
+- **済（web 側）**: ゲームの読み取りは、`API_URL` があれば `apps/api` から読む
+  （`src/lib/games.ts`。未設定ならモックストアに戻るので、api なしでも `npm run dev` で動く）。
+  クリップはまだ web のモックストア（アップロード分を含む）が持つため、ゲームの
+  `clipCount` だけはモック側の数を使う。クリップを api に移したら、この上書きを外す
+- **web をまだ api に切り替えていないもの**: クリップ・コメント・ランキング・急上昇・
+  いいね・プレイリスト・募集・ユーザー。これらは書き込みがまだ web のモックにあり、
+  読み取りだけ api にすると「いいねを押しても表示に反映されない」のように状態が割れるため、
+  書き込みを api に移すときにまとめて切り替える
+- **未**: 書き込み（ログイン・ログアウト、クリップの投稿、いいね、再生の記録、コメント、
+  プレイリスト、募集）、動画アップロードと配信（`/api/media`）
+- **開発用シードの注意**: 見せかけの再生履歴（`clip_views_hourly.seeded = true`）は「いま」を
+  基準に作るので、シードを流すたびに作り直す（`seeded = false` の本物の記録には触らない）。
+  docker compose は api の起動のたびにシードを流す
 
 ### 構成
 

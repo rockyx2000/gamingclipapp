@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { getGame, listGames, listTrending } from "@/lib/mock-db";
+import { listTrending } from "@/lib/mock-db";
+import { getGame, listGames } from "@/lib/games";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipRow } from "@/components/ClipRow";
 import { GameFilterSelect } from "@/components/GameFilterSelect";
@@ -15,7 +16,7 @@ export const metadata: Metadata = { title: "急上昇" };
 export default async function TrendingPage(props: PageProps<"/trending">) {
   const searchParams = await props.searchParams;
   const rawGame = typeof searchParams.game === "string" ? searchParams.game : undefined;
-  const game = rawGame ? getGame(rawGame) : undefined;
+  const game = rawGame ? await getGame(rawGame) : undefined;
   const clips = listTrending({ gameSlug: game?.slug });
 
   return (
@@ -26,7 +27,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
         <Typography variant="h2" sx={{ flexGrow: 1 }}>
           急上昇
         </Typography>
-        <GameFilterSelect games={listGames()} value={game?.slug ?? ""} />
+        <GameFilterSelect games={await listGames()} value={game?.slug ?? ""} />
       </Box>
       <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 2 }}>
         直近48時間で再生といいねが伸びているクリップです。新しい反応ほど重く数えます。

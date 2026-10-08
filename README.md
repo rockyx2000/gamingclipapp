@@ -52,8 +52,11 @@ api は起動のたびにマイグレーションとシード（何度流して�
 コードを変えたら `docker compose up --build` で作り直す（ホットリロードは無い。
 開発中はホストで下の `npm run dev` を使うと速い）。
 
-現時点では web はまだ api を呼ばず、従来どおりモック API で動く。api は
-ゲームとクリップの読み取り（`/api/games`、`/api/clips`）だけを実装している。
+web は `API_URL` が設定されていると、ゲームの読み取り（ゲーム一覧・詳細・絞り込み）を
+api から行う（compose では設定済み）。それ以外（クリップ・認証・いいね・コメント・
+プレイリスト・募集）はまだ従来どおりモック API で動く。api は読み取り API
+（ゲーム・クリップ・コメント・ランキング・急上昇・募集・ユーザー・プレイリスト・いいね一覧）を
+実装済みで、書き込みはまだ無い。
 
 ## 開発サーバーの起動
 
@@ -88,6 +91,7 @@ web のアップロード動画はコンテナ内の `/data` に保存される�
 | `DATA_DIR` | `./data`（Docker では `/data`） | 動画ファイル、`clips.json`、`social.json` の保存先 |
 | `MAX_UPLOAD_MB` | `200` | 動画ファイルの上限サイズ |
 | `MAX_THUMBNAIL_MB` | `10` | サムネイル画像の上限サイズ |
+| `API_URL` | 未設定（モックを使う） | web がゲームの読み取りに使う api の URL。例: `http://localhost:4000` |
 | `DATABASE_URL` | `postgres://gameclips:gameclips@localhost:5432/gameclips` | api が使う PostgreSQL の接続先 |
 | `PORT` | `4000`（api） | api の待ち受けポート |
 

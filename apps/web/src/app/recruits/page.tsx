@@ -5,7 +5,8 @@ import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
-import { listGames, listRecruits } from "@/lib/mock-db";
+import { listRecruits } from "@/lib/mock-db";
+import { listGames } from "@/lib/games";
 import { GameFilterSelect } from "@/components/GameFilterSelect";
 import { RecruitCard } from "@/components/RecruitCard";
 
@@ -40,7 +41,7 @@ export default async function RecruitsPage(props: PageProps<"/recruits">) {
       </Box>
 
       <Box sx={{ mb: 3 }}>
-        <GameFilterSelect games={listGames()} value={gameSlug ?? ""} />
+        <GameFilterSelect games={await listGames()} value={gameSlug ?? ""} />
       </Box>
 
       {recruits.length === 0 && (
