@@ -34,6 +34,8 @@ VOLUME ["/data"]
 # バンドル済みなので node_modules は要らない。マイグレーションの SQL だけ持ち込む
 COPY --from=builder --chown=api:nodejs /app/apps/api/dist ./dist
 COPY --from=builder --chown=api:nodejs /app/apps/api/drizzle ./drizzle
+# シードのクリップの動画（開発用）
+COPY --from=builder --chown=api:nodejs /app/apps/api/seed-media ./seed-media
 
 USER api
 EXPOSE 4000
