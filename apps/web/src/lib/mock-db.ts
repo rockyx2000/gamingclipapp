@@ -11,7 +11,14 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { games, seedClips, users } from "@gamingclipapp/shared/seed";
+import {
+  generateSeedViewHistory,
+  games,
+  seedClipComments,
+  seedClips,
+  seedRecruits,
+  users,
+} from "@gamingclipapp/shared/seed";
 import { CLIPS_FILE, SOCIAL_FILE } from "./config";
 import type {
   Clip,
@@ -28,126 +35,7 @@ import type {
   User,
 } from "@gamingclipapp/shared";
 
-// social.json にコメントがまだ無いとき（初回）だけ入れる見本のコメント
-const seedClipComments: Record<string, StoredClipComment[]> = {
-  c1: [
-    { id: "cc1", authorId: "u2", body: "最後のダッシュからの切り返しえぐい", createdAt: "2026-07-08T13:05:00.000Z" },
-    { id: "cc2", authorId: "u5", body: "これ味方視点で見たら泣く", createdAt: "2026-07-08T15:40:00.000Z" },
-  ],
-  c3: [
-    { id: "cc3", authorId: "u1", body: "グレの投げ込み位置、真似させてもらいます", createdAt: "2026-07-07T11:20:00.000Z" },
-  ],
-  c8: [
-    { id: "cc4", authorId: "u5", body: "0.5秒は盛ってると思ったらほんとに0.5秒だった", createdAt: "2026-07-10T13:00:00.000Z" },
-    { id: "cc5", authorId: "u3", body: "キー配置教えてほしい", createdAt: "2026-07-10T14:30:00.000Z" },
-  ],
-  c14: [
-    { id: "cc6", authorId: "u1", body: "最後のフラッシュの判断が完璧", createdAt: "2026-07-11T20:10:00.000Z" },
-  ],
-  c18: [
-    { id: "cc7", authorId: "u4", body: "試合で決めたのすごすぎる", createdAt: "2026-10-01T19:00:00.000Z" },
-  ],
-};
 
-const seedRecruits: RecruitPost[] = [
-  {
-    id: "r1",
-    gameId: "g1",
-    title: "【プラチナ帯】コンペ固定メンバー募集（あと2名）",
-    body: "平日21時〜23時に活動しているチームです。イニシエーターとセンチネルを使える方を探しています。VCはDiscord必須。楽しく真剣にランクを上げたい方、ぜひコメントください。",
-    author: users[0],
-    positions: ["イニシエーター", "センチネル"],
-    rank: "プラチナ〜ダイヤ",
-    status: "open",
-    createdAt: "2026-07-09T13:00:00.000Z",
-    comments: [
-      {
-        id: "rc1",
-        author: users[1],
-        body: "プラチナ2のソーヴァ・キルジョイ使いです。時間帯もぴったりなので興味あります！",
-        createdAt: "2026-07-09T14:30:00.000Z",
-      },
-      {
-        id: "rc2",
-        author: users[4],
-        body: "VCは聞き専でも大丈夫ですか？",
-        createdAt: "2026-07-09T16:45:00.000Z",
-      },
-    ],
-  },
-  {
-    id: "r2",
-    gameId: "g2",
-    title: "ランクマ用デュオ・トリオ相手募集【ダイヤ帯】",
-    body: "現在ダイヤ3です。IGLできる方だと嬉しいです。使用レジェンドは問いませんが、レイス・パスファインダーが得意です。",
-    author: users[4],
-    positions: ["IGL", "アタッカー"],
-    rank: "ダイヤ帯",
-    status: "open",
-    createdAt: "2026-07-10T10:20:00.000Z",
-    comments: [
-      {
-        id: "rc3",
-        author: users[0],
-        body: "ダイヤ4ですがIGL経験あります。今夜あたり一緒にどうですか？",
-        createdAt: "2026-07-10T11:00:00.000Z",
-      },
-    ],
-  },
-  {
-    id: "r3",
-    gameId: "g3",
-    title: "リグマメンバー募集！エンジョイ勢歓迎",
-    body: "週末の夜にリーグマッチを楽しむグループです。ウデマエ不問、楽しくやれる方ならどなたでも。前衛ブキが少ないので特に歓迎します。",
-    author: users[3],
-    positions: ["前衛", "自由枠"],
-    status: "open",
-    createdAt: "2026-07-08T18:00:00.000Z",
-    comments: [],
-  },
-  {
-    id: "r4",
-    gameId: "g5",
-    title: "対戦相手・トレモ仲間募集【MR1500前後】",
-    body: "ケン使いです。同じくらいのランク帯でカスタムルームを回せる方を探しています。金曜夜が中心です。",
-    author: users[2],
-    positions: ["対戦相手"],
-    rank: "MR1400〜1600",
-    status: "open",
-    createdAt: "2026-07-11T09:30:00.000Z",
-    comments: [
-      {
-        id: "rc4",
-        author: users[1],
-        body: "MR1450のジュリ使いです。金曜いけます！",
-        createdAt: "2026-07-11T12:10:00.000Z",
-      },
-    ],
-  },
-  {
-    id: "r5",
-    gameId: "g7",
-    title: "クラン戦向け5人チーム、サポート募集",
-    body: "エメラルド帯中心のチームです。毎週日曜にクラン戦に出ています。エンチャンター系サポートを使える方を募集中。",
-    author: users[2],
-    positions: ["サポート"],
-    rank: "エメラルド以上",
-    status: "open",
-    createdAt: "2026-07-06T20:00:00.000Z",
-    comments: [],
-  },
-  {
-    id: "r6",
-    gameId: "g1",
-    title: "【解決済み】アンレート気軽に回せる人",
-    body: "メンバーが集まったためクローズします。ありがとうございました。",
-    author: users[1],
-    positions: ["自由枠"],
-    status: "closed",
-    createdAt: "2026-07-04T15:00:00.000Z",
-    comments: [],
-  },
-];
 
 // HMR やルート間でストアの実体を共有するため globalThis にキャッシュする。
 // ストアの形を変えたら STORE_VERSION を上げる。dev サーバーを起動したままコードが
@@ -331,43 +219,6 @@ function scheduleViewSave(): void {
   }, 5000);
 }
 
-/** clip.id から決まる疑似乱数（起動ごとに同じ履歴になるように） */
-function seededRandom(seed: string): () => number {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  }
-  return () => {
-    h = Math.imul(h ^ (h >>> 15), 1 | h);
-    h ^= h + Math.imul(h ^ (h >>> 7), 61 | h);
-    return ((h ^ (h >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// シードクリップに直近 30 日の再生履歴を作る。どれか 1 日に山（バズった日）を置き、
-// 一部のクリップは山を直近 2 日に置くことで、急上昇と総合ランキングの顔ぶれが変わるようにする。
-function generateSeedViewHistory(clips: Clip[]): Map<string, Map<number, number>> {
-  const result = new Map<string, Map<number, number>>();
-  const nowHour = hourOf(Date.now());
-  for (const clip of clips) {
-    const rand = seededRandom(clip.id);
-    const buckets = new Map<number, number>();
-    const spikeDay = rand() < 0.35 ? Math.floor(rand() * 2) : 2 + Math.floor(rand() * 28);
-    const spikeScale = 4 + rand() * 6;
-    for (let day = 0; day < 30; day++) {
-      let perDay = clip.views * 0.004 * (0.3 + rand() * 1.4);
-      if (day === spikeDay) perDay *= spikeScale;
-      const perHour = Math.round(perDay / 24);
-      if (perHour === 0) continue;
-      for (let h = 0; h < 24; h++) {
-        const hour = nowHour - day * 24 - h;
-        buckets.set(hour, perHour + Math.floor(rand() * 3));
-      }
-    }
-    result.set(clip.id, buckets);
-  }
-  return result;
-}
 
 function getStore(): MockStore {
   const previous = globalForStore.__mockStore;

@@ -1,6 +1,6 @@
 // 読み取りクエリ。返す形は packages/shared の型（Game / ClipWithGame）に合わせる。
 
-import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { ClipWithGame, Game, GameGenre } from "@gamingclipapp/shared";
 import type { Db } from "./db/client";
 import { clips, games, users } from "./db/schema";
@@ -78,8 +78,11 @@ const clipSelect = {
   mimeType: clips.mimeType,
   sizeBytes: clips.sizeBytes,
   gameId: clips.gameId,
-  views: clips.views,
-  likes: clips.likes,
+  // 表示する数は、シードの初期値に、記録した再生・いいねを足したもの（web のモックと同じ）。
+  // clips は結合クエリでだけ使うので、列は修飾して直接書く
+  views: sql<number>`"clips"."views" + coalesce((select sum(v.count) from clip_views_hourly v where v.clip_id = "clips"."id" and not v.seeded), 0)::int`,
+  likes: sql<number>`"clips"."likes" + (select count(*) from clip_likes l where l.clip_id = "clips"."id")::int`,
+  commentCount: sql<number>`(select count(*)::int from clip_comments cc where cc.clip_id = "clips"."id")`,
   createdAt: clips.createdAt,
   uploader: {
     id: users.id,
@@ -110,8 +113,6 @@ function toClip(row: ClipRow): ClipWithGame {
     ...(mimeType !== null && { mimeType }),
     ...(sizeBytes !== null && { sizeBytes }),
     createdAt: createdAt.toISOString(),
-    // コメントを移すまでは数えられないので 0 を返す
-    commentCount: 0,
     game: toGame(game),
   };
 }
@@ -130,4 +131,12 @@ export async function listClips(db: Db, filter: ClipFilter = {}): Promise<ClipWi
 export async function getClip(db: Db, id: string): Promise<ClipWithGame | undefined> {
   const [row] = await selectClips(db, eq(clips.id, id)).limit(1);
   return row ? toClip(row) : undefined;
+}
+
+/** 指定した ID のクリップを、渡した順に返す（存在しない ID は飛ばす） */
+export async function listClipsByIds(db: Db, ids: string[]): Promise<ClipWithGame[]> {
+  if (ids.length === 0) return [];
+  const rows = await selectClips(db, inArray(clips.id, ids));
+  const byId = new Map(rows.map((r) => [r.id, toClip(r)]));
+  return ids.flatMap((id) => byId.get(id) ?? []);
 }
