@@ -36,6 +36,11 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+    environment:
+      # ゲームの読み取りを api から行う（未設定ならモックストア）
+      API_URL: http://api:4000
+    depends_on:
+      - api
     volumes:
       - web-data:/data
     ports:

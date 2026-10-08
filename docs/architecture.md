@@ -228,8 +228,12 @@ TypeScript 製のバックエンドを `apps/api` に追加する。
   （Hono / Drizzle / PostgreSQL、マイグレーション、シード、`docker-compose.yml`）、
   読み取り API（`GET /api/games`、`/api/games/:slug`、`/api/clips`、`/api/clips/:id`）、
   プローブ（`/api/healthz` は DB に触らない、`/api/readyz` は DB 接続まで見る）
-- **未**: 認証、いいね・再生数・コメント・プレイリスト・募集、動画アップロード。
-  `apps/web` はまだモック API を使っており、api は呼んでいない
+- **済（web 側）**: ゲームの読み取りは、`API_URL` があれば `apps/api` から読む
+  （`src/lib/games.ts`。未設定ならモックストアに戻るので、api なしでも `npm run dev` で動く）。
+  クリップはまだ web のモックストア（アップロード分を含む）が持つため、ゲームの
+  `clipCount` だけはモック側の数を使う。クリップを api に移したら、この上書きを外す
+- **未**: クリップの読み取りの切り替え、認証、いいね・再生数・コメント・プレイリスト・募集、
+  動画アップロード
 - **api と web のモックの差**: api の `commentCount` は、コメントを移すまで常に 0 を返す。
   `views` / `likes` はシードの初期値のままで、いいね・再生の記録を移したらその集計を足す
 

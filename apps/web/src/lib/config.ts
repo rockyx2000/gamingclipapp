@@ -50,3 +50,9 @@ export const CONTENT_TYPES: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
 };
+
+/**
+ * バックエンド（apps/api）のベース URL。設定すると、ゲームの読み取りを api から行う。
+ * 未設定なら従来どおりモックストアを使うので、api を立てなくても `npm run dev` で動く。
+ */
+export const API_URL = process.env.API_URL?.replace(/\/+$/, "") || undefined;

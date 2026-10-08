@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { getGame, listClips, listRecruits } from "@/lib/mock-db";
+import { listClips, listRecruits } from "@/lib/mock-db";
+import { getGame } from "@/lib/games";
 import { GameTabs } from "@/components/GameTabs";
 import { displaySx } from "@/theme";
 
@@ -12,7 +13,7 @@ export default async function GameDetailPage(
   props: PageProps<"/games/[slug]">,
 ) {
   const { slug } = await props.params;
-  const game = getGame(slug);
+  const game = await getGame(slug);
   if (!game) notFound();
 
   const clips = listClips({ gameSlug: slug });

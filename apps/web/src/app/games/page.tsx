@@ -5,7 +5,7 @@ import Chip from "@mui/material/Chip";
 import Grid from "@mui/material/Grid";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { listGames } from "@/lib/mock-db";
+import { listGames } from "@/lib/games";
 import { GAME_GENRES } from "@/lib/types";
 import { GameCard } from "@/components/GameCard";
 import { GameSearchBox } from "@/components/GameSearchBox";
@@ -28,7 +28,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
   const rawGenre = typeof searchParams.genre === "string" ? searchParams.genre : undefined;
   const genre = GAME_GENRES.find((g) => g === rawGenre);
   // 検索とジャンルは組み合わせられる。ジャンルを選び直しても検索語は残す
-  const games = listGames({ query: q, genre });
+  const games = await listGames({ query: q, genre });
   const hrefFor = (g?: string) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
