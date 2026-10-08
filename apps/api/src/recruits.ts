@@ -1,9 +1,9 @@
 // メンバー募集の読み取り
 
 import { asc, desc, eq, inArray } from "drizzle-orm";
-import type { Comment, RecruitStatus, RecruitWithGame } from "@gamingclipapp/shared";
+import type { Comment, RecruitStatus, RecruitWithGame, User } from "@gamingclipapp/shared";
 import type { Db } from "./db/client";
-import { recruitComments, recruitPosts, users } from "./db/schema";
+import { games, recruitComments, recruitPosts, users } from "./db/schema";
 import { getGame, listGames } from "./queries";
 
 const authorColumns = {
@@ -90,4 +90,49 @@ export async function listRecruits(db: Db, gameSlug?: string): Promise<RecruitWi
 export async function getRecruit(db: Db, id: string): Promise<RecruitWithGame | undefined> {
   const [post] = await selectPosts(db, eq(recruitPosts.id, id));
   return post;
+}
+
+export interface NewRecruitInput {
+  gameId: string;
+  title: string;
+  body: string;
+  positions: string[];
+  rank?: string;
+  author: User;
+}
+
+/** 募集を投稿する。ゲームが無ければ undefined */
+export async function addRecruit(db: Db, input: NewRecruitInput): Promise<RecruitWithGame | undefined> {
+  const [game] = await db.select({ id: games.id }).from(games).where(eq(games.id, input.gameId));
+  if (!game) return undefined;
+  const id = crypto.randomUUID();
+  await db.insert(recruitPosts).values({
+    id,
+    gameId: input.gameId,
+    title: input.title,
+    body: input.body,
+    authorId: input.author.id,
+    positions: input.positions,
+    rank: input.rank ?? null,
+    status: "open",
+    createdAt: new Date(),
+  });
+  return getRecruit(db, id);
+}
+
+/** 募集にコメントする。募集が無ければ undefined */
+export async function addRecruitComment(
+  db: Db,
+  postId: string,
+  author: User,
+  body: string,
+): Promise<Comment | undefined> {
+  const [post] = await db
+    .select({ id: recruitPosts.id })
+    .from(recruitPosts)
+    .where(eq(recruitPosts.id, postId));
+  if (!post) return undefined;
+  const comment = { id: crypto.randomUUID(), body, createdAt: new Date() };
+  await db.insert(recruitComments).values({ ...comment, postId, authorId: author.id });
+  return { ...comment, author, createdAt: comment.createdAt.toISOString() };
 }

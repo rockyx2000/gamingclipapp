@@ -1,15 +1,27 @@
 // Hono アプリ本体。DB を受け取るので、テストや別のランタイム（Workers）からも組み立てられる。
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { logger } from "hono/logger";
 import { sql } from "drizzle-orm";
 import type { Db } from "./db/client";
 import { getClip, getGame, listClips, listGames } from "./queries";
 import { getPlaylist, listPlaylistsByOwner } from "./playlists";
 import { isRankingPeriod, listRanking, listTrending } from "./ranking";
-import { getRecruit, listRecruits } from "./recruits";
-import { currentUser, listUsers } from "./session";
+import { addRecruit, addRecruitComment, getRecruit, listRecruits } from "./recruits";
+import { config } from "./config";
+import { currentUser, listUsers, login, logout } from "./session";
 import { likedClipIds, listClipComments, listLikedClips } from "./social";
+
+// 募集まわりの入力の上限（DB に無制限の文字列を入れないための安全弁）
+const RECRUIT_LIMITS = { title: 100, body: 2000, rank: 50, positions: 10, position: 30, comment: 500 };
+
+// JSON ボディをオブジェクトとして読む。JSON でなければ undefined
+async function readObject(c: Context): Promise<Record<string, unknown> | undefined> {
+  const value: unknown = await c.req.json().catch(() => undefined);
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
 
 export function createApp(db: Db) {
   const app = new Hono();
@@ -119,6 +131,79 @@ export function createApp(db: Db) {
 
   // GET /api/auth/me  現在のログインユーザー（未ログインなら user: null）
   app.get("/api/auth/me", async (c) => c.json({ user: (await currentUser(db, c)) ?? null }));
+
+  // ---- 書き込み ----
+
+  // POST /api/auth/login  { username } でログインする（デモログイン。パスワードの検証は無い）
+  app.post("/api/auth/login", async (c) => {
+    if (!config.demoLogin) {
+      return c.json({ error: "このサーバーではデモログインは使えません" }, 403);
+    }
+    const payload = await readObject(c);
+    const username = typeof payload?.username === "string" ? payload.username : "";
+    if (!username) return c.json({ error: "ユーザー名が必要です" }, 400);
+    const user = await login(db, c, username);
+    if (!user) return c.json({ error: "ユーザーが見つかりません" }, 401);
+    return c.json({ user });
+  });
+
+  // POST /api/auth/logout
+  app.post("/api/auth/logout", async (c) => {
+    await logout(db, c);
+    return c.json({ ok: true });
+  });
+
+  // POST /api/recruits  募集投稿（要ログイン）
+  app.post("/api/recruits", async (c) => {
+    const user = await currentUser(db, c);
+    if (!user) return c.json({ error: "ログインが必要です" }, 401);
+    const p = await readObject(c);
+    const gameId = typeof p?.gameId === "string" ? p.gameId : "";
+    const title = typeof p?.title === "string" ? p.title.trim() : "";
+    const body = typeof p?.body === "string" ? p.body.trim() : "";
+    if (!gameId || !title || !body) return c.json({ error: "入力内容が不正です" }, 400);
+    if (title.length > RECRUIT_LIMITS.title) {
+      return c.json({ error: `タイトルは${RECRUIT_LIMITS.title}文字以内にしてください` }, 400);
+    }
+    if (body.length > RECRUIT_LIMITS.body) {
+      return c.json({ error: `本文は${RECRUIT_LIMITS.body}文字以内にしてください` }, 400);
+    }
+    const positions = Array.isArray(p?.positions)
+      ? p.positions.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim())
+      : [];
+    if (positions.length > RECRUIT_LIMITS.positions || positions.some((x) => x.length > RECRUIT_LIMITS.position)) {
+      return c.json({ error: "募集ポジションが多すぎるか長すぎます" }, 400);
+    }
+    const rank = typeof p?.rank === "string" ? p.rank.trim() : "";
+    if (rank.length > RECRUIT_LIMITS.rank) {
+      return c.json({ error: `ランク帯は${RECRUIT_LIMITS.rank}文字以内にしてください` }, 400);
+    }
+    const recruit = await addRecruit(db, {
+      gameId,
+      title,
+      body,
+      positions,
+      rank: rank || undefined,
+      author: user,
+    });
+    if (!recruit) return c.json({ error: "ゲームが見つかりません" }, 400);
+    return c.json({ recruit }, 201);
+  });
+
+  // POST /api/recruits/:id/comments  { body } でコメントする（要ログイン）
+  app.post("/api/recruits/:id/comments", async (c) => {
+    const user = await currentUser(db, c);
+    if (!user) return c.json({ error: "ログインが必要です" }, 401);
+    const p = await readObject(c);
+    const body = typeof p?.body === "string" ? p.body.trim() : "";
+    if (!body) return c.json({ error: "コメント本文が必要です" }, 400);
+    if (body.length > RECRUIT_LIMITS.comment) {
+      return c.json({ error: `コメントは${RECRUIT_LIMITS.comment}文字以内にしてください` }, 400);
+    }
+    const comment = await addRecruitComment(db, c.req.param("id"), user, body);
+    if (!comment) return c.json({ error: "募集が見つかりません" }, 404);
+    return c.json({ comment }, 201);
+  });
 
   app.notFound((c) => c.json({ error: "見つかりません" }, 404));
   app.onError((err, c) => {

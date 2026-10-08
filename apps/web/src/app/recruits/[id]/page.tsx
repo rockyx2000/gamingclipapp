@@ -6,7 +6,7 @@ import Divider from "@mui/material/Divider";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { getRecruit } from "@/lib/mock-db";
+import { getRecruit } from "@/lib/recruits";
 import { timeAgo } from "@/lib/format";
 import { CommentSection } from "@/components/CommentSection";
 import { RecruitStatusChip } from "@/components/RecruitStatusChip";
@@ -17,7 +17,7 @@ export default async function RecruitDetailPage(
   props: PageProps<"/recruits/[id]">,
 ) {
   const { id } = await props.params;
-  const recruit = getRecruit(id);
+  const recruit = await getRecruit(id);
   if (!recruit) notFound();
 
   return (

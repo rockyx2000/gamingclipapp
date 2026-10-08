@@ -24,6 +24,8 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       DATABASE_URL: postgres://gameclips:gameclips@db:5432/gameclips
+      # ユーザー名だけでログインできるデモログイン（パスワード検証なし）。本番では付けない
+      DEMO_LOGIN: "true"
     depends_on:
       db:
         condition: service_healthy

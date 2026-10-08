@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { listClips, listRecruits } from "@/lib/mock-db";
+import { listClips } from "@/lib/mock-db";
+import { listRecruits } from "@/lib/recruits";
 import { getGame } from "@/lib/games";
 import { GameTabs } from "@/components/GameTabs";
 import { displaySx } from "@/theme";
@@ -17,7 +18,7 @@ export default async function GameDetailPage(
   if (!game) notFound();
 
   const clips = listClips({ gameSlug: slug });
-  const recruits = listRecruits(slug);
+  const recruits = await listRecruits(slug);
 
   return (
     <>
