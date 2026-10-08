@@ -22,7 +22,7 @@ export default async function LikedPage() {
       />
     );
   }
-  const clips = await listLikedClips(user.id);
+  const clips = await listLikedClips();
   return (
     <>
       <Typography variant="h2" sx={{ mb: 2 }}>

@@ -50,7 +50,7 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
   const user = await getCurrentUser();
 
   const listId = typeof searchParams.list === "string" ? searchParams.list : undefined;
-  const found = listId ? await getPlaylist(listId, user?.id) : undefined;
+  const found = listId ? await getPlaylist(listId) : undefined;
   // クリップが入っていないプレイリストを指定された場合は通常の視聴にする
   const playlist = found?.clips.some((c) => c.id === clip.id) ? found : undefined;
 
@@ -69,7 +69,7 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
     // スマホのフィード順: 開いたクリップ → 同じゲーム → 他のゲーム
     feed = [clip, ...sameGame, ...otherGames];
   }
-  const likedIds = user ? await likedClipIds(user.id, feed.map((c) => c.id)) : [];
+  const likedIds = user ? await likedClipIds(feed.map((c) => c.id)) : [];
 
   return (
     <>

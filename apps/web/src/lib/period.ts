@@ -8,3 +8,7 @@ export const PERIOD_LABELS: Record<RankingPeriod, string> = {
   month: "月間",
   all: "総合",
 };
+
+export function isRankingPeriod(value: string): value is RankingPeriod {
+  return value in PERIOD_LABELS;
+}

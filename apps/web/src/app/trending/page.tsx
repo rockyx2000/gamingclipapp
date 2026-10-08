@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "急上昇" };
 
-// 急上昇フィード。直近 48 時間の再生といいねの勢いで並べる（mock-db の listTrending）
+// 急上昇フィード。直近 48 時間の再生といいねの勢いで並べる（api の /api/trending）
 export default async function TrendingPage(props: PageProps<"/trending">) {
   const searchParams = await props.searchParams;
   const rawGame = typeof searchParams.game === "string" ? searchParams.game : undefined;
