@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
 import Grid from "@mui/material/Grid";
@@ -9,6 +10,7 @@ import Link from "next/link";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import {
   getClip,
   getPlaylist,
@@ -104,6 +106,14 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
               initialLikes={clip.likes}
             />
             <SaveButton clipId={clip.id} />
+            {/* 投稿者だけに、編集画面への入口を出す（タグの付け直しなどはそこでする） */}
+            {user?.id === clip.uploader.id && (
+              <Link href={`/clips/${clip.id}/edit`} style={{ textDecoration: "none" }}>
+                <Button variant="outlined" size="small" startIcon={<EditOutlinedIcon />}>
+                  編集
+                </Button>
+              </Link>
+            )}
             <Link
               href={`/games/${clip.game.slug}`}
               style={{ textDecoration: "none" }}
@@ -121,7 +131,6 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
             <ClipTags
               key={clip.id}
               clipId={clip.id}
-              uploaderId={clip.uploader.id}
               initialTags={clip.tags ?? []}
             />
           </Paper>

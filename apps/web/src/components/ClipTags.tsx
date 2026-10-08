@@ -1,7 +1,8 @@
 "use client";
 
 // クリップにタグ付けされたユーザーの一覧（映像の上の札とは別に、ページにも名前を並べる）。
-// タグは、付けられた本人と投稿者が外せる（本人が望まないタグを残さないため）。
+// ここで外せるのは、付けられた本人が自分のタグだけ（望まないタグを残さないため）。
+// 投稿者がタグを付け直したり外したりするのは、編集画面（/clips/:id/edit）でする。
 
 import { useState } from "react";
 import Alert from "@mui/material/Alert";
@@ -14,19 +15,17 @@ import { useAuth } from "./AuthProvider";
 
 interface Props {
   clipId: string;
-  uploaderId: string;
   initialTags: ClipTag[];
 }
 
-export function ClipTags({ clipId, uploaderId, initialTags }: Props) {
+export function ClipTags({ clipId, initialTags }: Props) {
   const { user } = useAuth();
   const [tags, setTags] = useState(initialTags);
   const [error, setError] = useState<string | null>(null);
 
   if (tags.length === 0 && !error) return null;
 
-  const mayRemove = (tagged: User) =>
-    user !== null && (user.id === uploaderId || user.id === tagged.id);
+  const mayRemove = (tagged: User) => user !== null && user.id === tagged.id;
 
   const handleRemove = async (tagged: User) => {
     setError(null);

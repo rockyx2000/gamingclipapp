@@ -14,6 +14,7 @@ import { decodeCursor, parseLimit } from "./comment-page";
 import { searchUsers, suggest } from "./search";
 import { removeTag, setTags } from "./tags";
 import { MAX_CLIP_COMMENT_LENGTH } from "@gamingclipapp/shared";
+import { deleteClip, replaceThumbnail, updateClip } from "./clip-edit";
 import { MAX_THUMBNAIL_BYTES, MAX_UPLOAD_BYTES, config } from "./config";
 import { HttpError } from "./errors";
 import { serveMedia } from "./media";
@@ -366,6 +367,36 @@ export function createApp(db: Db) {
     const user = await requireUser(db, c);
     const playlist = await removeClipFromPlaylist(db, c.req.param("id"), user.id, c.req.param("clipId"));
     return c.json({ playlist });
+  });
+
+  // PATCH /api/clips/:id  { title?, description?, gameId? } でクリップの情報を編集する（投稿者だけ）
+  app.patch("/api/clips/:id", async (c) => {
+    const user = await requireUser(db, c);
+    const patch = await readJsonObject(c);
+    return c.json({ clip: await updateClip(db, c.req.param("id"), user.id, patch) });
+  });
+
+  // PUT /api/clips/:id/thumbnail  サムネイル画像を差し替える（投稿者だけ、multipart/form-data の thumbnail）
+  app.put(
+    "/api/clips/:id/thumbnail",
+    bodyLimit({
+      maxSize: MAX_THUMBNAIL_BYTES + 1024 * 1024,
+      onError: (c) => c.json({ error: "ファイルサイズが大きすぎます" }, 413),
+    }),
+    async (c) => {
+      const user = await requireUser(db, c);
+      const form = await c.req.formData().catch(() => {
+        throw new HttpError("multipart/form-data で送信してください", 400);
+      });
+      return c.json({ clip: await replaceThumbnail(db, c.req.param("id"), user.id, form.get("thumbnail")) });
+    },
+  );
+
+  // DELETE /api/clips/:id  クリップを削除する（投稿者だけ）
+  app.delete("/api/clips/:id", async (c) => {
+    const user = await requireUser(db, c);
+    await deleteClip(db, c.req.param("id"), user.id);
+    return c.body(null, 204);
   });
 
   // POST /api/clips  クリップ投稿（要ログイン、multipart/form-data）

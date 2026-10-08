@@ -1,7 +1,13 @@
 // クリップの投稿（動画とサムネイルの保存、メタデータの登録）
 
 import { eq } from "drizzle-orm";
-import { MAX_CLIP_DURATION_SEC, type ClipWithGame, type User } from "@gamingclipapp/shared";
+import {
+  MAX_CLIP_DESCRIPTION_LENGTH,
+  MAX_CLIP_DURATION_SEC,
+  MAX_CLIP_TITLE_LENGTH,
+  type ClipWithGame,
+  type User,
+} from "@gamingclipapp/shared";
 import {
   IMAGE_EXTENSIONS,
   MAX_THUMBNAIL_BYTES,
@@ -36,6 +42,12 @@ export async function createClipFromForm(db: Db, form: FormData, uploader: User)
   const thumbnail = form.get("thumbnail");
 
   if (!title || !gameId) throw new HttpError("タイトルとゲームは必須です", 400);
+  if (title.length > MAX_CLIP_TITLE_LENGTH) {
+    throw new HttpError(`タイトルは${MAX_CLIP_TITLE_LENGTH}文字以内にしてください`, 400);
+  }
+  if (description.length > MAX_CLIP_DESCRIPTION_LENGTH) {
+    throw new HttpError(`説明は${MAX_CLIP_DESCRIPTION_LENGTH}文字以内にしてください`, 400);
+  }
   const [game] = await db.select({ id: games.id }).from(games).where(eq(games.id, gameId));
   if (!game) throw new HttpError("存在しないゲームです", 400);
   if (!Number.isFinite(duration) || duration < 1) throw new HttpError("動画の長さが不正です", 400);

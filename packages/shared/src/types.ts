@@ -150,6 +150,10 @@ export interface ClipWithGame extends Clip {
   commentCount: number;
 }
 
+/** クリップのタイトルと説明の上限（文字数） */
+export const MAX_CLIP_TITLE_LENGTH = 100;
+export const MAX_CLIP_DESCRIPTION_LENGTH = 2000;
+
 /** クリップへのコメント本文の上限（文字数） */
 export const MAX_CLIP_COMMENT_LENGTH = 500;
 

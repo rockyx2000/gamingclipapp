@@ -16,7 +16,12 @@ import Typography from "@mui/material/Typography";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { formatTimecode } from "@/lib/video-edit";
 import { displaySx } from "@/theme";
-import type { ClipTag, Game } from "@/lib/types";
+import {
+  MAX_CLIP_DESCRIPTION_LENGTH,
+  MAX_CLIP_TITLE_LENGTH,
+  type ClipTag,
+  type Game,
+} from "@/lib/types";
 import { gameMenuItems } from "@/components/gameMenuItems";
 import { TagEditor } from "@/components/TagEditor";
 
@@ -31,12 +36,16 @@ export interface ClipDetails {
 /** サムネイルとして受け付ける画像 */
 export const THUMBNAIL_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
+/** サムネイル画像の上限サイズ（api の MAX_THUMBNAIL_MB の既定と同じ） */
+export const MAX_THUMBNAIL_BYTES = 10 * 1024 * 1024;
+
 export type ThumbnailKind = "frame" | "image";
 
 interface Props {
   previewUrl: string;
   lengthSec: number;
-  sizeBytes: number;
+  /** ファイルサイズ。分からないとき（シードのクリップなど）は出さない */
+  sizeBytes?: number;
   games: Game[];
   value: ClipDetails;
   onChange: (next: ClipDetails) => void;
@@ -105,14 +114,16 @@ export function DetailsStep({
               長さ
             </Typography>
           </Stack>
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
-            <Typography component="span" sx={{ ...displaySx, fontSize: 20 }}>
-              {formatSize(sizeBytes)}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              サイズ
-            </Typography>
-          </Stack>
+          {sizeBytes ? (
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
+              <Typography component="span" sx={{ ...displaySx, fontSize: 20 }}>
+                {formatSize(sizeBytes)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                サイズ
+              </Typography>
+            </Stack>
+          ) : null}
         </Stack>
       </Grid>
 
@@ -125,6 +136,7 @@ export function DetailsStep({
             value={value.title}
             onChange={(e) => onChange({ ...value, title: e.target.value })}
             disabled={disabled}
+            slotProps={{ htmlInput: { maxLength: MAX_CLIP_TITLE_LENGTH } }}
           />
           <TextField
             multiline
@@ -134,6 +146,7 @@ export function DetailsStep({
             value={value.description}
             onChange={(e) => onChange({ ...value, description: e.target.value })}
             disabled={disabled}
+            slotProps={{ htmlInput: { maxLength: MAX_CLIP_DESCRIPTION_LENGTH } }}
           />
           <TextField
             select
