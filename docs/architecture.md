@@ -222,6 +222,27 @@ social.json
 
 TypeScript 製のバックエンドを `apps/api` に追加する。
 
+### 進捗
+
+- **済**: `packages/shared`（ドメイン型とシードデータ）、`apps/api` の土台
+  （Hono / Drizzle / PostgreSQL、マイグレーション、シード、`docker-compose.yml`）、
+  読み取り API（`GET /api/games`、`/api/games/:slug`、`/api/clips`、`/api/clips/:id`）、
+  プローブ（`/api/healthz` は DB に触らない、`/api/readyz` は DB 接続まで見る）
+- **未**: 認証、いいね・再生数・コメント・プレイリスト・募集、動画アップロード。
+  `apps/web` はまだモック API を使っており、api は呼んでいない
+- **api と web のモックの差**: api の `commentCount` は、コメントを移すまで常に 0 を返す。
+  `views` / `likes` はシードの初期値のままで、いいね・再生の記録を移したらその集計を足す
+
+### 構成
+
+- `packages/shared` は TypeScript のソースのまま配布する（ビルドしない）。
+  `@gamingclipapp/shared` は型だけ（クライアントコンポーネントからも読むため）、
+  シードは `@gamingclipapp/shared/seed` に分けてあり、web のモックストアと api のシードが共用する
+- api は tsup で依存ごと 1 つのバンドルにする。実行イメージに `node_modules` は要らない
+- 返す JSON の形（`{ games }` / `{ game }` / `{ clips }` / `{ clip }` / `{ error }`）は
+  web のモック API と揃えてあるので、`mock-db.ts` を fetch に差し替えるときに形を変えなくて済む
+- 並び順はシードの並び（`games.sort_order`）、クリップは新しい順
+
 - 候補: Hono（軽量・Cloudflare Workers 互換）または NestJS（学習コスト高いが本格的）
 - 移行手順:
   1. `packages/shared` を作り `types.ts` を移動、web / api の両方から参照する

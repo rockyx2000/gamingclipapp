@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // モノレポのため、ファイルトレースのルートをリポジトリルートに合わせる
   outputFileTracingRoot: path.join(__dirname, "../../"),
+  // packages/shared は TypeScript のソースのまま配布しているので、Next にトランスパイルさせる
+  transpilePackages: ["@gamingclipapp/shared"],
 };
 
 export default nextConfig;

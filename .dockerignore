@@ -2,3 +2,8 @@ node_modules
 .next
 .git
 *.md
+dist
+data
+apps/*/node_modules
+apps/web/.next
+apps/api/dist
