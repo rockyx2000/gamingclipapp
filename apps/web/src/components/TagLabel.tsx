@@ -19,6 +19,8 @@ interface Props {
 export function TagLabel({ tag, action, onPointerDown, title }: Props) {
   return (
     <Box
+      // 親の層が「札の上のクリック」を新しいタグ付けと取り違えないための目印
+      data-tag-label
       title={title ?? `@${tag.user.username}`}
       onPointerDown={onPointerDown}
       sx={{

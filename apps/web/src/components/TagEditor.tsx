@@ -42,7 +42,9 @@ export function TagEditor({ previewUrl, value, onChange, disabled }: Props) {
   const [pending, setPending] = useState<Pending | null>(null);
   const [frame, setFrame] = useState<HTMLDivElement | null>(null);
   const rect = useContentRect(frame, aspect);
-  const drag = useRef<{ id: string } | null>(null);
+  const drag = useRef<{ id: string; moved: boolean } | null>(null);
+  // 札をドラッグして離したあとに続けて届くクリックを、新しいタグ付けとして扱わない
+  const suppressClick = useRef(false);
   const full = value.length >= MAX_CLIP_TAGS;
 
   // 画面上の座標を、映像のコマに対する割合に直す（黒帯の上なら null）
@@ -57,6 +59,8 @@ export function TagEditor({ previewUrl, value, onChange, disabled }: Props) {
 
   const handleLayerClick = (e: React.MouseEvent) => {
     if (!tagging || full) return;
+    // 札の上のクリックと、ドラッグの直後のクリックは、新しいタグ付けではない
+    if (suppressClick.current || (e.target as HTMLElement).closest("[data-tag-label]")) return;
     const ratio = toRatio(e.clientX, e.clientY);
     if (ratio) setPending({ ...ratio, anchor: { left: e.clientX, top: e.clientY } });
   };
@@ -72,8 +76,12 @@ export function TagEditor({ previewUrl, value, onChange, disabled }: Props) {
   // 札のドラッグ。掴んだ札だけを動かし、映像の外には出さない
   const startDrag = (id: string) => (e: ReactPointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { id };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // キャプチャできなくても、ドラッグ自体は layer 上の pointermove で追える
+    }
+    drag.current = { id, moved: false };
   };
   const handleMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!drag.current) return;
@@ -82,9 +90,17 @@ export function TagEditor({ previewUrl, value, onChange, disabled }: Props) {
     const x = clamp01((e.clientX - box.left - rect.left) / rect.width);
     const y = clamp01((e.clientY - box.top - rect.top) / rect.height);
     const id = drag.current.id;
+    drag.current.moved = true;
     onChange(value.map((t) => (t.user.id === id ? { ...t, x, y } : t)));
   };
   const endDrag = () => {
+    if (drag.current?.moved) {
+      // このあとにブラウザが送ってくるクリックを 1 回だけ無視する
+      suppressClick.current = true;
+      setTimeout(() => {
+        suppressClick.current = false;
+      }, 0);
+    }
     drag.current = null;
   };
 
