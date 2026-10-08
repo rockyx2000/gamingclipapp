@@ -1,9 +1,12 @@
 import { getCurrentUser } from "@/lib/auth";
 import { addClipToPlaylist, PlaylistError } from "@/lib/mock-db";
 import { playlistErrorResponse, readJsonObject } from "@/lib/playlist-input";
+import { API_URL } from "@/lib/config";
+import { proxyToApi } from "@/lib/api";
 
 // POST /api/playlists/:id/clips  { clipId } を末尾に追加する（持ち主のみ、追加済みなら何もしない）
 export async function POST(request: Request, ctx: RouteContext<"/api/playlists/[id]/clips">) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "ログインが必要です" }, { status: 401 });

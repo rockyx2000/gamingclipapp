@@ -184,3 +184,19 @@ export const recruitComments = pgTable(
   },
   (t) => [index("recruit_comments_post_idx").on(t.postId)],
 );
+
+/**
+ * 再生の重複判定。同じ視聴者（匿名 ID の Cookie）が同じクリップを短時間に見直した分を数えないための、
+ * 最後に数えた時刻。DB に持つので、api を複数動かしても判定が揃う。
+ */
+export const clipViewDedupe = pgTable(
+  "clip_view_dedupe",
+  {
+    viewerKey: text("viewer_key").notNull(),
+    clipId: text("clip_id")
+      .notNull()
+      .references(() => clips.id, { onDelete: "cascade" }),
+    lastAt: timestamp("last_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.viewerKey, t.clipId] }), index("clip_view_dedupe_last_idx").on(t.lastAt)],
+);

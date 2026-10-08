@@ -5,8 +5,8 @@ import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
-import { listRecruits } from "@/lib/mock-db";
 import { listGames } from "@/lib/games";
+import { listRecruits } from "@/lib/recruits";
 import { GameFilterSelect } from "@/components/GameFilterSelect";
 import { RecruitCard } from "@/components/RecruitCard";
 
@@ -18,7 +18,7 @@ export default async function RecruitsPage(props: PageProps<"/recruits">) {
   const searchParams = await props.searchParams;
   const gameSlug =
     typeof searchParams.game === "string" ? searchParams.game : undefined;
-  const recruits = listRecruits(gameSlug);
+  const recruits = await listRecruits(gameSlug);
 
   return (
     <>

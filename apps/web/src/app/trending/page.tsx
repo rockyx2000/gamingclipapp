@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { listTrending } from "@/lib/mock-db";
+import { listTrending } from "@/lib/clips";
 import { getGame, listGames } from "@/lib/games";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipRow } from "@/components/ClipRow";
@@ -17,7 +17,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
   const searchParams = await props.searchParams;
   const rawGame = typeof searchParams.game === "string" ? searchParams.game : undefined;
   const game = rawGame ? await getGame(rawGame) : undefined;
-  const clips = listTrending({ gameSlug: game?.slug });
+  const clips = await listTrending({ gameSlug: game?.slug });
 
   return (
     <>

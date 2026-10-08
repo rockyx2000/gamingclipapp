@@ -235,16 +235,44 @@ TypeScript 製のバックエンドを `apps/api` に追加する。
     非公開なら持ち主だけ（他人には 404）。`GET /api/me/liked-clip-ids?ids=` は
     視聴ページの「いいね済み」表示用（モックにはなく、api で足した）
   - プローブ: `/api/healthz`（DB に触らない）、`/api/readyz`（DB 接続まで見る）
-- **済（web 側）**: ゲームの読み取りは、`API_URL` があれば `apps/api` から読む
-  （`src/lib/games.ts`。未設定ならモックストアに戻るので、api なしでも `npm run dev` で動く）。
-  クリップはまだ web のモックストア（アップロード分を含む）が持つため、ゲームの
-  `clipCount` だけはモック側の数を使う。クリップを api に移したら、この上書きを外す
-- **web をまだ api に切り替えていないもの**: クリップ・コメント・ランキング・急上昇・
-  いいね・プレイリスト・募集・ユーザー。これらは書き込みがまだ web のモックにあり、
-  読み取りだけ api にすると「いいねを押しても表示に反映されない」のように状態が割れるため、
-  書き込みを api に移すときにまとめて切り替える
-- **未**: 書き込み（ログイン・ログアウト、クリップの投稿、いいね、再生の記録、コメント、
-  プレイリスト、募集）、動画アップロードと配信（`/api/media`）
+- **済（書き込み）**: web のモック API と同じ書き込みを、すべて api に実装した
+  - 認証: `POST /api/auth/login`（`{ username }`）、`POST /api/auth/logout`。セッションは
+    `sessions` テーブルに持ち、Cookie `gca_session`（httpOnly / SameSite=Lax / 7 日）で引く。
+    期限切れの行は読まない
+  - **デモログインは本物の認証ではない**（パスワードの検証が無い）。`production` では
+    `DEMO_LOGIN=true` を明示したときだけ有効で、無効なら 403 を返す。compose では有効にしてある。
+    k8s へ移すときに、Cloudflare 経由の Google OAuth に置き換える予定
+  - 募集: `POST /api/recruits`、`POST /api/recruits/:id/comments`。DB に無制限の文字列を
+    入れないよう、文字数の上限を付けた（タイトル 100 / 本文 2000 / ランク帯 50 /
+    ポジション 10 個・各 30 / コメント 500）。モックにはなかった制限
+  - いいね: `PUT` / `DELETE /api/clips/:id/like`（冪等、`{ liked, likes }`）
+  - 再生の記録: `POST /api/clips/:id/view`。匿名 ID の Cookie（`gca_viewer`）で視聴者を区別し、
+    同じ視聴者の 30 分以内の再生は数えない。判定は `clip_view_dedupe` への
+    `INSERT ... ON CONFLICT` 1 回で行うので、api を複数動かしても、同時に来ても二重に数えない
+    （モックはプロセスのメモリで判定していたため、再起動で消え、複数 Pod では揃わなかった）
+  - クリップへのコメント: `POST /api/clips/:id/comments`、`DELETE .../comments/:commentId`
+    （書いた本人かクリップの投稿者だけ削除できる）
+  - プレイリスト: `POST /api/playlists`、`PATCH` / `DELETE /api/playlists/:id`、
+    `POST /api/playlists/:id/clips`、`DELETE /api/playlists/:id/clips/:clipId`
+    （他人の非公開は 404、他人の公開は 403）
+  - クリップの投稿: `POST /api/clips`（multipart/form-data）。動画とサムネイルは
+    `ClipStorage`（`src/storage.ts`、ローカルディスク）に保存し、`GET /api/media/*` で
+    Range 付きで配信する。保存先は `DATA_DIR`（compose では `api-data` ボリューム）
+- **済（web 側）**: `API_URL` があれば、すべての読み書きを api から行う。未設定ならモックストアに
+  戻るので、api なしでも `npm run dev` で動く
+  - サーバーコンポーネントからの読み取りは `src/lib/games.ts`、`clips.ts`、`recruits.ts`、
+    `auth.ts` を通る（`API_URL` の有無でモックと api を切り替える）。リクエストの Cookie
+    （`gca_session`、`gca_viewer`）は api に引き継ぐ
+  - ブラウザからの呼び出し（`/api/...` の Route Handler）は api への転送（`proxyToApi`）になり、
+    本文とレスポンスをストリームのまま流す。ステータスと Set-Cookie も引き継ぐ。
+    動画のアップロードと Range 付きの配信もここを通る。ブラウザは今までどおり web の URL だけを
+    見ていればよい（Cookie も同じオリジンのまま）
+  - `GET /api/me/liked-clip-ids` は web のサーバーコンポーネント専用で、ブラウザ用の転送は無い
+- **残り**: モックストア（`mock-db.ts`、`/api/*` のモック実装、`storage.ts` など）は、
+  `API_URL` 未設定のホスト起動のために残してある。api 前提にするなら、まとめて削除できる
+- **移行の途中で見つけた制限**: Docker VM のメモリが少ない（Rancher Desktop の既定は 2GB）と、
+  web のイメージのビルド（`next build`）が `cannot allocate memory` で失敗することがある。
+  他のコンテナを止めてからビルドするか、VM のメモリを増やす
 - **開発用シードの注意**: 見せかけの再生履歴（`clip_views_hourly.seeded = true`）は「いま」を
   基準に作るので、シードを流すたびに作り直す（`seeded = false` の本物の記録には触らない）。
   docker compose は api の起動のたびにシードを流す

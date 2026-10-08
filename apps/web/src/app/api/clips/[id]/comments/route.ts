@@ -1,9 +1,12 @@
 import { getCurrentUser } from "@/lib/auth";
 import { addClipComment, listClipComments } from "@/lib/mock-db";
 import { MAX_CLIP_COMMENT_LENGTH } from "@/lib/types";
+import { API_URL } from "@/lib/config";
+import { proxyToApi } from "@/lib/api";
 
 // GET /api/clips/:id/comments  コメント一覧（新しい順、ログイン不要）
-export async function GET(_request: Request, ctx: RouteContext<"/api/clips/[id]/comments">) {
+export async function GET(request: Request, ctx: RouteContext<"/api/clips/[id]/comments">) {
+  if (API_URL) return proxyToApi(request);
   const { id } = await ctx.params;
   const comments = listClipComments(id);
   if (!comments) {
@@ -14,6 +17,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/clips/[id]/
 
 // POST /api/clips/:id/comments  { body } でコメントする（要ログイン）
 export async function POST(request: Request, ctx: RouteContext<"/api/clips/[id]/comments">) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "ログインが必要です" }, { status: 401 });

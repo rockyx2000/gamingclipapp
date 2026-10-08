@@ -5,9 +5,12 @@ import {
   playlistErrorResponse,
   readJsonObject,
 } from "@/lib/playlist-input";
+import { API_URL } from "@/lib/config";
+import { proxyToApi } from "@/lib/api";
 
 // GET /api/playlists/:id  公開プレイリストは誰でも、非公開は持ち主だけ見られる
-export async function GET(_request: Request, ctx: RouteContext<"/api/playlists/[id]">) {
+export async function GET(request: Request, ctx: RouteContext<"/api/playlists/[id]">) {
+  if (API_URL) return proxyToApi(request);
   const { id } = await ctx.params;
   const user = await getCurrentUser();
   const playlist = getPlaylist(id, user?.id);
@@ -19,6 +22,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/playlists/[
 
 // PATCH /api/playlists/:id  タイトル・説明・公開設定・並び順の変更（持ち主のみ）
 export async function PATCH(request: Request, ctx: RouteContext<"/api/playlists/[id]">) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "ログインが必要です" }, { status: 401 });
@@ -34,7 +38,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/playlists/
 }
 
 // DELETE /api/playlists/:id  削除（持ち主のみ）
-export async function DELETE(_request: Request, ctx: RouteContext<"/api/playlists/[id]">) {
+export async function DELETE(request: Request, ctx: RouteContext<"/api/playlists/[id]">) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "ログインが必要です" }, { status: 401 });

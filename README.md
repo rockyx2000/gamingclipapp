@@ -52,11 +52,16 @@ api は起動のたびにマイグレーションとシード（何度流して�
 コードを変えたら `docker compose up --build` で作り直す（ホットリロードは無い。
 開発中はホストで下の `npm run dev` を使うと速い）。
 
-web は `API_URL` が設定されていると、ゲームの読み取り（ゲーム一覧・詳細・絞り込み）を
-api から行う（compose では設定済み）。それ以外（クリップ・認証・いいね・コメント・
-プレイリスト・募集）はまだ従来どおりモック API で動く。api は読み取り API
-（ゲーム・クリップ・コメント・ランキング・急上昇・募集・ユーザー・プレイリスト・いいね一覧）を
-実装済みで、書き込みはまだ無い。
+web は `API_URL` が設定されていると、すべての読み書き（ゲーム、クリップ、投稿と動画、
+いいね、再生数、コメント、プレイリスト、ランキング、急上昇、募集、ログイン）を api 経由で
+行う（compose では設定済み）。`API_URL` を外すと従来のモック API に戻る。
+デモログイン（ユーザー名だけで入れる）は、compose では `DEMO_LOGIN=true` で有効にしている。
+
+アップロードした動画は api の `api-data` ボリューム、DB は `db-data` ボリュームに残る。
+
+`docker compose up --build` で web のビルドが `cannot allocate memory` で失敗するときは、
+Docker の VM のメモリが足りない（Rancher Desktop の既定は 2GB）。`docker compose stop` で
+他のコンテナを止めてからビルドするか、VM のメモリを増やす。
 
 ## 開発サーバーの起動
 
@@ -88,12 +93,14 @@ web のアップロード動画はコンテナ内の `/data` に保存される�
 
 | 変数 | 既定値 | 説明 |
 |---|---|---|
-| `DATA_DIR` | `./data`（Docker では `/data`） | 動画ファイル、`clips.json`、`social.json` の保存先 |
-| `MAX_UPLOAD_MB` | `200` | 動画ファイルの上限サイズ |
-| `MAX_THUMBNAIL_MB` | `10` | サムネイル画像の上限サイズ |
+| `DATA_DIR` | `./data`（Docker では `/data`） | 動画ファイルの保存先。web のモックは `clips.json`、`social.json` もここに置く（api は DB に保存） |
+| `MAX_UPLOAD_MB` | `200` | 動画ファイルの上限サイズ（web のモックと api の両方） |
+| `MAX_THUMBNAIL_MB` | `10` | サムネイル画像の上限サイズ（同上） |
 | `API_URL` | 未設定（モックを使う） | web がゲームの読み取りに使う api の URL。例: `http://localhost:4000` |
 | `DATABASE_URL` | `postgres://gameclips:gameclips@localhost:5432/gameclips` | api が使う PostgreSQL の接続先 |
 | `PORT` | `4000`（api） | api の待ち受けポート |
+| `DEMO_LOGIN` | production では未設定（無効） | `true` でデモログインを有効にする。パスワード検証が無いので本番では使わない |
+| `COOKIE_SECURE` | `false` | `true` でセッション Cookie に Secure を付ける（HTTPS で配信するとき） |
 
 `apps/web/.env.example` を `.env.local` にコピーして設定できる。
 

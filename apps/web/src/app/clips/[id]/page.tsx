@@ -12,11 +12,10 @@ import Typography from "@mui/material/Typography";
 import {
   getClip,
   getPlaylist,
-  isLiked,
   likedClipIds,
   listClipComments,
   listClips,
-} from "@/lib/mock-db";
+} from "@/lib/clips";
 import { getCurrentUser } from "@/lib/auth";
 import type { ClipWithGame } from "@/lib/types";
 import { formatViews, timeAgo } from "@/lib/format";
@@ -34,7 +33,7 @@ export async function generateMetadata(
   props: PageProps<"/clips/[id]">,
 ): Promise<Metadata> {
   const { id } = await props.params;
-  const clip = getClip(id);
+  const clip = await getClip(id);
   return { title: clip?.title ?? "クリップ" };
 }
 
@@ -46,16 +45,16 @@ export async function generateMetadata(
 export default async function ClipPage(props: PageProps<"/clips/[id]">) {
   const { id } = await props.params;
   const searchParams = await props.searchParams;
-  const clip = getClip(id);
+  const clip = await getClip(id);
   if (!clip) notFound();
   const user = await getCurrentUser();
 
   const listId = typeof searchParams.list === "string" ? searchParams.list : undefined;
-  const found = listId ? getPlaylist(listId, user?.id) : undefined;
+  const found = listId ? await getPlaylist(listId, user?.id) : undefined;
   // クリップが入っていないプレイリストを指定された場合は通常の視聴にする
   const playlist = found?.clips.some((c) => c.id === clip.id) ? found : undefined;
 
-  const sameGame = listClips({ gameSlug: clip.game.slug }).filter(
+  const sameGame = (await listClips({ gameSlug: clip.game.slug })).filter(
     (c) => c.id !== clip.id,
   );
   let feed: ClipWithGame[];
@@ -66,11 +65,11 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
     const next = playlist.clips[playlist.clips.findIndex((c) => c.id === clip.id) + 1];
     if (next) nextHref = `/clips/${next.id}?list=${playlist.id}`;
   } else {
-    const otherGames = listClips().filter((c) => c.gameId !== clip.gameId);
+    const otherGames = (await listClips()).filter((c) => c.gameId !== clip.gameId);
     // スマホのフィード順: 開いたクリップ → 同じゲーム → 他のゲーム
     feed = [clip, ...sameGame, ...otherGames];
   }
-  const likedIds = user ? likedClipIds(user.id, feed.map((c) => c.id)) : [];
+  const likedIds = user ? await likedClipIds(user.id, feed.map((c) => c.id)) : [];
 
   return (
     <>
@@ -100,7 +99,7 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
             <LikeButton
               key={clip.id}
               clipId={clip.id}
-              initialLiked={user ? isLiked(clip.id, user.id) : false}
+              initialLiked={likedIds.includes(clip.id)}
               initialLikes={clip.likes}
             />
             <SaveButton clipId={clip.id} />
@@ -124,7 +123,7 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
               key={clip.id}
               clipId={clip.id}
               uploaderId={clip.uploader.id}
-              initialComments={listClipComments(clip.id) ?? []}
+              initialComments={(await listClipComments(clip.id)) ?? []}
             />
           </Box>
         </Grid>

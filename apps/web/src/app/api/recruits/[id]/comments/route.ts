@@ -1,12 +1,15 @@
 import { NextRequest } from "next/server";
 import { addRecruitComment } from "@/lib/mock-db";
 import { getCurrentUser } from "@/lib/auth";
+import { API_URL } from "@/lib/config";
+import { proxyToApi } from "@/lib/api";
 
 // POST /api/recruits/:id/comments  コメント投稿（要ログイン）
 export async function POST(
   request: NextRequest,
   ctx: RouteContext<"/api/recruits/[id]/comments">,
 ) {
+  if (API_URL) return proxyToApi(request);
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "ログインが必要です" }, { status: 401 });

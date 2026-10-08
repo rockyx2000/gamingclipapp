@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { getCurrentUser } from "@/lib/auth";
-import { listLikedClips } from "@/lib/mock-db";
+import { listLikedClips } from "@/lib/clips";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipRow } from "@/components/ClipRow";
 import { LoginPrompt } from "@/components/LoginPrompt";
@@ -22,7 +22,7 @@ export default async function LikedPage() {
       />
     );
   }
-  const clips = listLikedClips(user.id);
+  const clips = await listLikedClips(user.id);
   return (
     <>
       <Typography variant="h2" sx={{ mb: 2 }}>

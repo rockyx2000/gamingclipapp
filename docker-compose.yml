@@ -24,11 +24,16 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       DATABASE_URL: postgres://gameclips:gameclips@db:5432/gameclips
+      # ユーザー名だけでログインできるデモログイン（パスワード検証なし）。本番では付けない
+      DEMO_LOGIN: "true"
     depends_on:
       db:
         condition: service_healthy
     # 起動のたびにマイグレーションとシード（何度流しても重複しない）を済ませてから待ち受ける
     command: ["sh", "-c", "node dist/db/migrate.js && node dist/db/seed.js && node dist/index.js"]
+    volumes:
+      # アップロードした動画・サムネイル
+      - api-data:/data
     ports:
       - "4000:4000"
 
@@ -42,10 +47,12 @@ services:
     depends_on:
       - api
     volumes:
+      # API_URL を外してモックで動かすときだけ使う
       - web-data:/data
     ports:
       - "3000:3000"
 
 volumes:
   db-data:
+  api-data:
   web-data:
