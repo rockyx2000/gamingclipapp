@@ -31,7 +31,29 @@ YouTube のゲームクリップ版を目指す Web アプリケーション。
 
 ## 必要環境
 
-- Node.js 22 以上
+- Docker（`docker compose` で動かす場合は、これだけあればよい）
+- Node.js 22 以上（ホストで直接動かす場合。`.nvmrc` あり）
+
+## Docker で一式を動かす
+
+web・api・PostgreSQL を 1 コマンドで起動する。Node.js のインストールは要らない。
+
+```bash
+docker compose up --build
+```
+
+| サービス | URL |
+|---|---|
+| web | http://localhost:3000 |
+| api | http://localhost:4000/api/healthz |
+
+api は起動のたびにマイグレーションとシード（何度流しても重複しない）を済ませてから待ち受ける。
+止めるときは `docker compose down`、DB とアップロード動画ごと消すときは `docker compose down -v`。
+コードを変えたら `docker compose up --build` で作り直す（ホットリロードは無い。
+開発中はホストで下の `npm run dev` を使うと速い）。
+
+現時点では web はまだ api を呼ばず、従来どおりモック API で動く。api は
+ゲームとクリップの読み取り（`/api/games`、`/api/clips`）だけを実装している。
 
 ## 開発サーバーの起動
 
@@ -50,14 +72,14 @@ npm run start   # 本番ビルドの起動
 npm run lint    # ESLint
 ```
 
-## Docker
+## イメージを個別にビルドする
 
 ```bash
 docker build -f apps/web/Dockerfile -t gamingclipapp-web:dev .
-docker run --rm -p 3000:3000 -v gamingclipapp-data:/data gamingclipapp-web:dev
+docker build -f apps/api/Dockerfile -t gamingclipapp-api:dev .
 ```
 
-アップロードした動画はコンテナ内の `/data` に保存されるので、ボリュームをマウントして永続化する。
+web のアップロード動画はコンテナ内の `/data` に保存されるので、ボリュームをマウントして永続化する。
 
 ## 環境変数
 
@@ -66,6 +88,8 @@ docker run --rm -p 3000:3000 -v gamingclipapp-data:/data gamingclipapp-web:dev
 | `DATA_DIR` | `./data`（Docker では `/data`） | 動画ファイル、`clips.json`、`social.json` の保存先 |
 | `MAX_UPLOAD_MB` | `200` | 動画ファイルの上限サイズ |
 | `MAX_THUMBNAIL_MB` | `10` | サムネイル画像の上限サイズ |
+| `DATABASE_URL` | `postgres://gameclips:gameclips@localhost:5432/gameclips` | api が使う PostgreSQL の接続先 |
+| `PORT` | `4000`（api） | api の待ち受けポート |
 
 `apps/web/.env.example` を `.env.local` にコピーして設定できる。
 
@@ -75,7 +99,12 @@ docker run --rm -p 3000:3000 -v gamingclipapp-data:/data gamingclipapp-web:dev
 apps/web/          Next.js フロントエンド（モック API を含む）
   src/app/         ページと Route Handlers
   src/components/  UI コンポーネント
-  src/lib/         型定義・モックデータ層・ユーティリティ
+  src/lib/         モックデータ層・ユーティリティ
+apps/api/          Hono + Drizzle + PostgreSQL のバックエンド
+  src/db/          スキーマ・マイグレーション実行・シード
+  drizzle/         生成されたマイグレーション SQL
+packages/shared/   web と api で共有するドメイン型とシードデータ
+docker-compose.yml web / api / PostgreSQL をまとめて起動する
 docs/              設計ドキュメント（architecture.md）
 k8s/               Kubernetes マニフェスト予定地
 ```

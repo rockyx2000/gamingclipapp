@@ -1,0 +1,11 @@
+{
+  "name": "@gamingclipapp/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "apps/web と apps/api で共有するドメイン型とシードデータ",
+  "exports": {
+    ".": "./src/index.ts",
+    "./seed": "./src/seed.ts"
+  }
+}

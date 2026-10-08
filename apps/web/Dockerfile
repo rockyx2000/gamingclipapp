@@ -7,7 +7,8 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
-RUN npm ci
+COPY packages/shared/package.json ./packages/shared/
+RUN npm ci -w apps/web
 
 # ---- ビルド ----
 FROM node:22-alpine AS builder
