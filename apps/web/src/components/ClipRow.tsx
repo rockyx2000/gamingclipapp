@@ -68,7 +68,7 @@ export function ClipRow({ clip, rank, query, meta, actions }: Props) {
         <Box
           sx={{
             position: "relative",
-            width: { xs: 128, sm: 200 },
+            width: { xs: 112, sm: 200 },
             flexShrink: 0,
             aspectRatio: "16 / 9",
             borderRadius: 1,
@@ -110,7 +110,7 @@ export function ClipRow({ clip, rank, query, meta, actions }: Props) {
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
             {clip.uploader.displayName}
-            {"　"}
+            {" ・ "}
             {clip.game.name}
           </Typography>
           <Typography variant="caption" color="text.secondary" component="div">

@@ -6,7 +6,8 @@ import { getGame, isRankingPeriod, listGames, listRanking } from "@/lib/mock-db"
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipRow } from "@/components/ClipRow";
 import { GameFilterSelect } from "@/components/GameFilterSelect";
-import { PERIOD_LABELS, PeriodTabs } from "@/components/PeriodTabs";
+import { PeriodTabs } from "@/components/PeriodTabs";
+import { PERIOD_LABELS } from "@/lib/period";
 
 export const dynamic = "force-dynamic";
 

@@ -5,14 +5,8 @@
 import Link from "next/link";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
+import { PERIOD_LABELS } from "@/lib/period";
 import type { RankingPeriod } from "@/lib/types";
-
-export const PERIOD_LABELS: Record<RankingPeriod, string> = {
-  day: "日間",
-  week: "週間",
-  month: "月間",
-  all: "総合",
-};
 
 interface Props {
   value: RankingPeriod;

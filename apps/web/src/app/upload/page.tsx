@@ -22,6 +22,7 @@ import Stepper from "@mui/material/Stepper";
 import Typography from "@mui/material/Typography";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useAuth } from "@/components/AuthProvider";
+import { LoginPrompt } from "@/components/LoginPrompt";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { EditStep } from "@/components/upload/EditStep";
 import {
@@ -353,9 +354,7 @@ export default function UploadPage() {
 
   if (!loading && !user) {
     return (
-      <Alert severity="info">
-        クリップをアップロードするにはログインが必要です。ヘッダーの「ログイン」から進んでください。
-      </Alert>
+      <LoginPrompt message="クリップを投稿するにはログインしてください。" next="/upload" />
     );
   }
 
