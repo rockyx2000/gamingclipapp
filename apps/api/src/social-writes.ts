@@ -5,6 +5,7 @@ import type { Comment, User } from "@gamingclipapp/shared";
 import type { Db } from "./db/client";
 import { clipComments, clipLikes, clips, clipViewDedupe, clipViewsHourly } from "./db/schema";
 import { VIEW_DEDUPE_MS } from "./limits";
+import { resolveMentions } from "./mentions";
 import { getClip } from "./queries";
 
 /** いいねを付ける / 外す。冪等で、同じ操作を繰り返しても数は変わらない。クリップが無ければ undefined */
@@ -79,9 +80,12 @@ export async function addClipComment(
 ): Promise<Comment | undefined> {
   const [clip] = await db.select({ id: clips.id }).from(clips).where(eq(clips.id, clipId));
   if (!clip) return undefined;
+  const mentions = await resolveMentions(db, body);
   const comment = { id: crypto.randomUUID(), body, createdAt: new Date() };
-  await db.insert(clipComments).values({ ...comment, clipId, authorId: author.id });
-  return { ...comment, author, createdAt: comment.createdAt.toISOString() };
+  await db
+    .insert(clipComments)
+    .values({ ...comment, clipId, authorId: author.id, mentions: mentions.map((u) => u.id) });
+  return { ...comment, author, createdAt: comment.createdAt.toISOString(), mentions };
 }
 
 /** コメントを書いた本人か、クリップの投稿者なら削除できる */

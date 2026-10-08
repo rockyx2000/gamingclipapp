@@ -2,14 +2,13 @@ import type { Metadata } from "next";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { isRankingPeriod } from "@/lib/mock-db";
 import { listRanking } from "@/lib/clips";
 import { getGame, listGames } from "@/lib/games";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipRow } from "@/components/ClipRow";
 import { GameFilterSelect } from "@/components/GameFilterSelect";
 import { PeriodTabs } from "@/components/PeriodTabs";
-import { PERIOD_LABELS } from "@/lib/period";
+import { PERIOD_LABELS, isRankingPeriod } from "@/lib/period";
 
 export const dynamic = "force-dynamic";
 

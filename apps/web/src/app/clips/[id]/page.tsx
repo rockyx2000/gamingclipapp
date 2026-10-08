@@ -13,7 +13,6 @@ import {
   getClip,
   getPlaylist,
   likedClipIds,
-  listClipComments,
   listClips,
 } from "@/lib/clips";
 import { getCurrentUser } from "@/lib/auth";
@@ -21,6 +20,7 @@ import type { ClipWithGame } from "@/lib/types";
 import { formatViews, timeAgo } from "@/lib/format";
 import { ClipCard } from "@/components/ClipCard";
 import { ClipComments } from "@/components/ClipComments";
+import { ClipTags } from "@/components/ClipTags";
 import { LikeButton } from "@/components/LikeButton";
 import { PlaylistPanel } from "@/components/PlaylistPanel";
 import { SaveButton } from "@/components/SaveButton";
@@ -50,7 +50,7 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
   const user = await getCurrentUser();
 
   const listId = typeof searchParams.list === "string" ? searchParams.list : undefined;
-  const found = listId ? await getPlaylist(listId, user?.id) : undefined;
+  const found = listId ? await getPlaylist(listId) : undefined;
   // クリップが入っていないプレイリストを指定された場合は通常の視聴にする
   const playlist = found?.clips.some((c) => c.id === clip.id) ? found : undefined;
 
@@ -69,7 +69,7 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
     // スマホのフィード順: 開いたクリップ → 同じゲーム → 他のゲーム
     feed = [clip, ...sameGame, ...otherGames];
   }
-  const likedIds = user ? await likedClipIds(user.id, feed.map((c) => c.id)) : [];
+  const likedIds = user ? await likedClipIds(feed.map((c) => c.id)) : [];
 
   return (
     <>
@@ -82,6 +82,7 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
             src={clip.videoUrl}
             poster={clip.thumbnailUrl}
             nextHref={nextHref}
+            tags={clip.tags}
           />
           <Typography variant="h2" sx={{ mt: 2 }}>
             {clip.title}
@@ -117,13 +118,19 @@ export default async function ClipPage(props: PageProps<"/clips/[id]">) {
             <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap" }}>
               {clip.description}
             </Typography>
+            <ClipTags
+              key={clip.id}
+              clipId={clip.id}
+              uploaderId={clip.uploader.id}
+              initialTags={clip.tags ?? []}
+            />
           </Paper>
           <Box sx={{ mt: 3 }}>
             <ClipComments
               key={clip.id}
               clipId={clip.id}
               uploaderId={clip.uploader.id}
-              initialComments={(await listClipComments(clip.id)) ?? []}
+              initialCount={clip.commentCount}
             />
           </Box>
         </Grid>

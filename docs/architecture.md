@@ -10,29 +10,27 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 - いいね・コメント・プレイリスト・再生数ランキング・急上昇フィードを持つ
 - アカウント機能を持つが、未ログインでも閲覧は可能
 
-## 現在のフェーズ: フロントエンドモック (PoC)
+## 現在の構成
 
 ```
-+--------------------------------------------------+
-| apps/web (Next.js 16 / App Router / MUI v9)      |
-|                                                  |
-|  ページ (Server Components)                       |
-|      |            \                              |
-|      v             v                             |
-|  src/lib/mock-db.ts   <--  /api/* Route Handlers |
-|  (インメモリストア)          (モック API)            |
-+--------------------------------------------------+
+ブラウザ ──> apps/web (Next.js 16 / App Router / MUI v9) ──> apps/api (Hono) ──> PostgreSQL
+              ページ (Server Components)  ── api クライアント ──┘      │
+              /api/* Route Handler (転送) ─────────────────────────────┤
+                                                                      └──> ClipStorage (動画・サムネイル)
 ```
 
-- **`src/lib/mock-db.ts`** がデータアクセス層。サーバーコンポーネントと
-  Route Handlers の両方がこの層を経由する
-- **`/api/*` Route Handlers** は本物のバックエンドと同じ形の REST API を提供する。
-  クライアントコンポーネント（フォーム、ログイン等）はここへ fetch する
-- 認証は httpOnly Cookie にセッション ID を保存する簡易モック
-- 募集・セッションはインメモリのためサーバー再起動で初期化される（モックとして許容）
-- 動画のアップロードは実装済み。ファイルは **`src/lib/storage.ts`**（ストレージ層）経由で
-  `DATA_DIR/uploads/` に保存し、投稿メタデータは `DATA_DIR/clips.json` に永続化する
-- いいね・コメント・再生記録・プレイリストは `DATA_DIR/social.json` に永続化する（後述）
+- **web は状態を持たない**。データの読み書きはすべて apps/api を経由する。複数レプリカにしてよい
+- サーバーコンポーネントは `src/lib/games.ts`・`clips.ts`・`recruits.ts`・`auth.ts` の
+  api クライアントで読む。リクエストの Cookie（`gca_session`、`gca_viewer`）は api に引き継ぐ
+  （`src/lib/api.ts`）。`API_URL` の既定は `http://localhost:4000`
+- ブラウザからの `/api/...` は、`src/app/api/[...path]/route.ts` が api へそのまま転送する
+  （`/api/healthz` だけは web 自身が返す）。本文とレスポンスをストリームのまま流し、
+  ステータスと Set-Cookie も引き継ぐので、動画のアップロードや Range 付きの配信も通る。
+  ブラウザは web の URL だけを見ればよく、Cookie も同じオリジンのまま使える
+- 認証は httpOnly Cookie（`gca_session`）のセッションで、`sessions` テーブルで引く。
+  **デモログイン（ユーザー名だけ）で、本物の認証ではない**。`production` では `DEMO_LOGIN=true` を
+  明示したときだけ有効。k8s へ移すときに、Cloudflare 経由の Google OAuth に置き換える予定
+- `docker compose up --build` で web / api / PostgreSQL が揃う（README 参照）
 
 ## API 一覧
 
@@ -40,13 +38,18 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 |---|---|---|
 | GET | `/api/healthz` | ヘルスチェック（K8s プローブ用） |
 | GET | `/api/clips?game=&q=` | クリップ一覧（フィルタ可） |
-| POST | `/api/clips` | クリップ投稿（要ログイン、multipart/form-data、`durationSec` は 60 以下） |
+| POST | `/api/clips` | クリップ投稿（要ログイン、multipart/form-data、`durationSec` は 60 以下、`tags` は `[{ username, x, y }]` の JSON 配列） |
 | GET | `/api/media/:clipId/:file` | アップロードした動画・サムネイルの配信（Range 対応） |
 | GET | `/api/clips/:id` | クリップ詳細 |
 | PUT / DELETE | `/api/clips/:id/like` | いいねする / 外す（要ログイン、冪等。`{ liked, likes }` を返す） |
 | POST | `/api/clips/:id/view` | 再生を 1 回記録（ログイン不要、同じ視聴者の 30 分以内の重複は数えない） |
-| GET | `/api/clips/:id/comments` | コメント一覧（新しい順） |
-| POST | `/api/clips/:id/comments` | コメント投稿（要ログイン、`{ body }`、500 文字以内） |
+| GET | `/api/clips/:id/comments?limit=&cursor=` | コメント一覧（新しい順、20 件ずつ。`{ comments, nextCursor }`） |
+| POST | `/api/clips/:id/comments` | コメント投稿（要ログイン、`{ body }`、500 文字以内。本文の `@ユーザー名` は `mentions` に解決して返す） |
+| PUT | `/api/clips/:id/tags` | 映像の上のタグを入れ替える（投稿者だけ、`{ tags: [{ username, x, y }] }`） |
+| DELETE | `/api/clips/:id/tags/:userId` | タグを外す（投稿者か、タグ付けされた本人） |
+| GET | `/api/search/suggest?q=` | 検索サジェスト（`{ games, clips }`、各 5 件） |
+| GET | `/api/users/search?q=` | ユーザー検索（`@` メンション・タグ付けの候補。要ログイン） |
+| GET | `/api/recruits/:id/comments?limit=&cursor=` | 募集のコメント一覧（クリップと同じ形） |
 | DELETE | `/api/clips/:id/comments/:commentId` | コメント削除（書いた本人かクリップの投稿者） |
 | GET | `/api/ranking?period=&game=` | 再生数ランキング（`period` は `day` / `week` / `month` / `all`） |
 | GET | `/api/trending?game=` | 急上昇 |
@@ -65,7 +68,7 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 | GET | `/api/recruits/:id` | 募集詳細 |
 | POST | `/api/recruits/:id/comments` | コメント投稿（要ログイン） |
 | GET | `/api/users` | デモユーザー一覧 |
-| POST | `/api/auth/login` | モックログイン |
+| POST | `/api/auth/login` | デモログイン（ユーザー名のみ） |
 | POST | `/api/auth/logout` | ログアウト |
 | GET | `/api/auth/me` | 現在のユーザー |
 
@@ -96,52 +99,99 @@ GameClips は YouTube のゲームクリップ版を目指す Web アプリケ�
 
 ## いいね・コメント・再生数・ランキング・プレイリスト
 
-すべて `src/lib/mock-db.ts` に実装し、`DATA_DIR/social.json` に保存する。
+すべて apps/api が PostgreSQL に保存する（`apps/api/src/db/schema.ts`）。
 
 ```
-social.json
-  likes        [{ clipId, userId, at }]          いいね（誰がいつ）
-  viewTotals   { clipId: 記録した再生の累計 }
-  viewBuckets  { clipId: { 時間バケット: 再生数 } }  直近 31 日だけ残す
-  playlists    [Playlist]
-  clipComments { clipId: [{ id, authorId, body, createdAt }] }  投稿順
+clip_likes          (clip_id, user_id, liked_at)             いいね（誰がいつ）
+clip_views_hourly   (clip_id, hour, seeded, count)           時間別の再生数。seeded = 開発用シードの見せかけ
+clip_view_dedupe    (viewer_key, clip_id, last_at)           再生の重複判定
+clip_comments       (id, clip_id, author_id, body, created_at)
+playlists / playlist_clips (position で再生順)
 ```
 
-- **書き込み**: 一時ファイルに書いて `rename` する。書き込みは 1 本の Promise チェーンに
-  並べ、同時に書いて壊れないようにする。再生は 1 回ごとに書くと重いので 5 秒まとめて保存する
+- **書き込み**: 計算は api 側（`social-writes.ts`、`playlists.ts`）。クリップの
+  `views` / `likes` は、シードの初期値に記録分を足した数を読み取り時に計算して返す
 - **再生数**: 視聴ページ（PC）は `VideoPlayer` の再生開始、スマホのフィードは
   表示中のクリップの再生開始で `POST /api/clips/:id/view` を送る（`useRecordView`）。
   ページを開いただけ・プリフェッチでは数えない。視聴者はログインと関係なく
-  匿名 ID の Cookie（`gca_viewer`）で区別し、同じ視聴者の 30 分以内の再生は 1 回にまとめる
+  匿名 ID の Cookie（`gca_viewer`）で区別し、同じ視聴者の 30 分以内の再生は 1 回にまとめる。
+  重複判定は `clip_view_dedupe` への `INSERT ... ON CONFLICT` 1 回で行うので、api を
+  複数動かしても、同時に来ても二重に数えない
 - **ランキング (`/ranking`)**: 日間・週間・月間は直近 24 時間 / 7 日 / 30 日の
   時間バケットの合計、総合は総再生数で並べる。ゲームで絞り込める
 - **急上昇 (`/trending`)**: 直近 48 時間の再生といいねを、12 時間で重みが半分になる
   減衰をかけて合計したスコアで並べる（いいね 1 件 = 再生 5 回ぶん）。
   総再生数が多いだけの古いクリップより、いま伸びているクリップが上に来る
-- **シードの再生履歴**: シードクリップには起動時に直近 30 日の再生履歴を生成する
-  （クリップ ID から決まる疑似乱数で、一部は直近 2 日に山を置く）。
-  ランキングと急上昇の見た目を確かめるためのもので、永続化しない
+- **シードの再生履歴**: シードクリップには、直近 30 日の再生履歴を `seeded = true` の行として作る
+  （クリップ ID から決まる疑似乱数で、一部は直近 2 日に山を置く。`packages/shared` の
+  `generateSeedViewHistory`）。ランキングと急上昇の見た目を確かめるための開発用で、
+  「いま」を基準に作るので、シードを流すたびに作り直す（`seeded = false` の本物の記録には触らない）。
+  クリップの総再生数には足さない
 - **いいね**: 押した瞬間に表示を変え、API が失敗したら戻す（`useLike`）。
   未ログインなら `/login?next=<今の URL>` へ送り、ログイン後に戻ってくる
 - **コメント**: PC は説明欄の下、スマホはフィード右側のボタンから下に開くシート
   （`CommentsSheet`）で読み書きする。どちらも `ClipComments` を使い、投稿・削除は
   API の結果で手元の一覧を更新する。投稿者は ID だけ保存し、表示時に `User` を引く。
-  削除できるのは書いた本人とクリップの投稿者。`social.json` に `clipComments` が
-  無いとき（初回）だけ見本のコメントを入れる
+  削除できるのは書いた本人とクリップの投稿者
 - **プレイリスト**: 視聴ページの「保存」からチェックで追加・削除し、その場で新規作成もできる。
   `/playlists` が一覧（先頭に「高く評価したクリップ」= いいね一覧）、
   `/playlists/:id` が詳細で、持ち主は編集・削除・並べ替えができる。
   非公開のものは持ち主以外には 404 を返し、存在も漏らさない
 - **プレイリスト再生**: `/clips/:id?list=<プレイリスト ID>` で開くと、PC は右側に一覧を出し
   最後まで見たら次のクリップへ進む。スマホはプレイリストの順にスワイプする
-- **制限事項（PoC）**: 再生数の重複判定はインメモリなので再起動でリセットされる。
-  Cookie を消せば数え直せるため、本番では IP やログインユーザーも合わせて判定し、
-  集計は DB 側（時間別の集計テーブルなど）に移す
+- **制限事項**: Cookie を消せば再生を数え直せる。本番では IP やログインユーザーも合わせて判定する
+
+## 検索サジェスト・コメント欄・メンション・タグ付け・ホバー再生
+
+- **検索サジェスト（`SearchBox`）**: ヘッダーの検索欄に入力すると、200ms 止まってから
+  `GET /api/search/suggest?q=` を呼び、ゲーム名とクリップのタイトルを候補に出す（前方一致が先、
+  各 5 件。`%` や `_` はただの文字として検索する）。↑↓ で候補を移動、Enter で開く、Esc で閉じる。
+  候補を選ばずに Enter ならこれまでどおりキーワード検索（`/?q=`）。古い応答は捨てる
+  （`useDebouncedFetch`）
+- **コメント欄の非同期化（`CommentThread`）**: クリップと募集で共用する。
+  ページの表示を待たせないよう、視聴ページはコメントを読み込まずに描画し、開いたあとにブラウザから
+  1 ページ目（20 件）を読む（読み込み中はスケルトン）。続きは「もっと見る」で、
+  `(created_at, id)` のカーソルで読む（新しいコメントが増えても、ずれたり重複したりしない）。
+  投稿と削除は API の返事を待たずに画面へ反映し、失敗したら元に戻す（書いた文は入力欄に返す）。
+  ページの再読み込み（`router.refresh()`）はしない。募集のコメントも同じ作りになり、
+  新しい順の一覧になった（以前は古い順）。他の人の新しいコメントを自動で取り込む処理（ポーリング）は無い
+- **メンション**: コメントの入力欄で `@` に続けて打つと、ユーザーの候補が出る（`MentionTextField`、
+  `GET /api/users/search`）。投稿時に api が本文の `@ユーザー名` を解釈し、実在するユーザーだけを
+  `mentions`（ユーザー ID）に保存して、`mentions: User[]` として返す（1 コメント 10 人まで、
+  大文字小文字は区別しない）。表示（`CommentBody`）は、`mentions` にある `@名前` だけを強調し、
+  実在しない `@xxx` やメールアドレスの `@` はただの文字のまま。
+  **通知は無い**（呼ばれた人に知らせる仕組みは未実装）。プロフィールページも無いので、リンクにはしていない
+- **タグ付け（Instagram 風）**: 映像の上の位置にユーザーのタグを付ける。位置は映像のコマに対する
+  割合（`x`, `y`、0〜1、左上が原点）で `clip_tags` に保存する。割合なので、画面の大きさや映像の
+  縦横比（黒帯の有無）が違っても、同じ人の上に出る。表示するときは、まず映像が実際に映っている長方形
+  （`object-fit: contain` の結果）を求め（`lib/clip-tags.ts` の `containRect`、`useContentRect`）、
+  その中に置く。縦横比は映像の `loadedmetadata` で知る
+  - **投稿画面（`TagEditor`）**: 「タグを付ける」で映像を止め、映像の上をクリックした位置に、
+    ユーザーを検索して付ける（`UserSearchField`、10 人まで、自分は除く）。札はドラッグで動かせ、
+    × で外せる。黒帯の上のクリックは無視する。頭出しは、タグ付けを始める前にプレイヤーで済ませる
+  - **視聴ページ**: 映像の左上の人物アイコン（`TagToggle`）で、札を出したり隠したりする
+    （Instagram と同じく、押したときだけ出す。札の名前は表示専用）。ページには「タグ付けされた
+    ユーザー」の一覧も出し、投稿者と付けられた本人は、そこから外せる（`ClipTags`）。
+    スマホのフィードでは、右側のボタン列に「タグ」ボタンが出る
+  - **api**: 投稿の `tags` は `[{ "username", "x", "y" }]` の JSON 配列。位置が 0〜1 の外、
+    ユーザーが実在しない、10 人超、同じユーザーの重複（先のものだけ残す）、投稿者本人（除く）を検証する。
+    `PUT /api/clips/:id/tags`（`{ tags: [...] }`）で入れ替え（投稿者だけ。`tags` の付け忘れは 400 で、
+    黙って全部消えない）、`DELETE /api/clips/:id/tags/:userId` で 1 人外す（投稿者か本人）。
+    タグは一覧・ランキング・急上昇・いいね・プレイリストなど、すべてのクリップの返り値に付く
+    （スマホのフィードでも出せるように、1 回の問い合わせでまとめて引く）
+  - **通知は無い**。投稿後にタグの位置や人を編集する画面も無い（api だけ）
+- **サムネイルのホバー再生（`HoverPreview`）**: クリップカード・一覧の行・プレイリストの一覧で、
+  サムネイルにマウスを乗せて 350ms たつと、動画の最初の 5 秒を無音で再生する。再生が始まったら
+  サムネイルと入れ替え、5 秒たつ（または読み込みに失敗する）とサムネイルに戻る。外してもう一度乗せると
+  頭から再生する。通り過ぎただけでは読み込まない。マウスのない端末（`hover: hover` でない）と、
+  動きを減らす設定（`prefers-reduced-motion`）では動かさない。スマホのフィードには入れていない
+- **既知の制限**: 開発用シードのクリップの動画（`commondatastorage.googleapis.com/gtv-videos-bucket/sample/`）は、
+  配布元が 403 を返すため再生できない（ホバー再生も視聴ページも動かない）。アップロードしたクリップは動く
 
 ## 動画のアップロードと保存
 
 ```
-ブラウザ (/upload の 3 フェーズ)             サーバー (Route Handler)
+ブラウザ (/upload の 3 フェーズ)             api (Hono。web の /api が転送する)
   | [1] 選択: ドロップ、<video> で長さを読み取る |
   | [2] 編集: 範囲・フィルター・テキスト・BGM     |
   |     「この範囲で進む」で mediabunny が書き出す（ブラウザ内、保存なし）
@@ -151,7 +201,7 @@ social.json
   |-- POST /api/clips (multipart) -------->|  検証（MIME / サイズ / 長さ / ゲーム）
   |   video, thumbnail, title, gameId...   |  storage.put("<id>/video.mp4")
   |   (XHR で進捗表示)                      |  storage.put("<id>/thumb.<ext>")
-  |                                        |  addClip() -> clips.json に追記
+  |                                        |  clips テーブルに登録
   |<-- 201 { clip } ----------------------|
   |                                        |
   |-- GET /api/media/<id>/video.mp4 ------>|  storage.read()（Range 対応で 206 を返す）
@@ -196,12 +246,12 @@ social.json
 - **サムネイル**: 書き出したクリップの好きなコマ（スライダーで位置を選ぶ）か、
   手持ちの画像（JPEG / PNG / WebP）のどちらか。どちらも `thumbnail` として同じ
   multipart で送り、サーバーは MIME から拡張子を決めて保存する
-- **ストレージ層 (`src/lib/storage.ts`)**: `ClipStorage` インターフェースと
+- **ストレージ層 (`apps/api/src/storage.ts`)**: `ClipStorage` インターフェースと
   ローカルディスク実装。キーは `<clipId>/video.<ext>` と `<clipId>/thumb.<ext>`
-- **設定 (`src/lib/config.ts`)**: `DATA_DIR`、`MAX_UPLOAD_MB`、`MAX_THUMBNAIL_MB` を
-  環境変数から読む
-- **制限事項（PoC）**:
-  - `request.formData()` はファイル全体をメモリに載せるため、巨大ファイルには向かない
+- **設定 (`apps/api/src/config.ts`)**: `DATA_DIR`、`MAX_UPLOAD_MB`、`MAX_THUMBNAIL_MB` を
+  環境変数から読む。投稿の検証は `apps/api/src/uploads.ts`、配信は `media.ts`
+- **制限事項**:
+  - `formData()` はファイル全体をメモリに載せるため、巨大ファイルには向かない
   - 動画の長さはブラウザが読み取った値を信用している（サーバー側の ffprobe 検証は未実装）
   - 書き出しの再エンコードはブラウザの性能に依存する。長い範囲やテキスト付きは時間がかかる
   - フィルターとテキストは映像に焼き込むため、投稿後に外せない
@@ -218,17 +268,17 @@ social.json
   署名付き URL でブラウザから直接オブジェクトストレージへ送る方式にする。
   配信は `/api/media` ではなくストレージの公開 URL / CDN を使う
 
-## 次フェーズ: 本物のバックエンド (apps/api)
+## バックエンド (apps/api)
 
-TypeScript 製のバックエンドを `apps/api` に追加する。
+TypeScript 製のバックエンド。web のモック API から移行済みで、モックは削除した。
 
 ### 進捗
 
-- **済（api）**: 読み取り API は一通り実装した。web のモック API と同じ形・同じ計算で返す
+- **済（api）**: 読み取り API は一通り実装した（返す形と計算は、モック API だった頃と同じ）
   - ゲーム・クリップ: `GET /api/games`、`/api/games/:slug`、`/api/clips`、`/api/clips/:id`
     （`views` / `likes` / `commentCount` は、シードの初期値に記録分を足した現在の数）
   - `GET /api/clips/:id/comments`（新しい順）
-  - `GET /api/ranking?period=&game=`、`GET /api/trending?game=`（計算式は web のモックと同じ）
+  - `GET /api/ranking?period=&game=`、`GET /api/trending?game=`（計算式はモック API だった頃と同じ）
   - `GET /api/recruits?game=`、`/api/recruits/:id`
   - `GET /api/users`、`GET /api/auth/me`（Cookie `gca_session` を `sessions` テーブルで引く）
   - 要ログイン: `GET /api/me/likes`、`GET /api/playlists`。`GET /api/playlists/:id` は
@@ -258,18 +308,8 @@ TypeScript 製のバックエンドを `apps/api` に追加する。
   - クリップの投稿: `POST /api/clips`（multipart/form-data）。動画とサムネイルは
     `ClipStorage`（`src/storage.ts`、ローカルディスク）に保存し、`GET /api/media/*` で
     Range 付きで配信する。保存先は `DATA_DIR`（compose では `api-data` ボリューム）
-- **済（web 側）**: `API_URL` があれば、すべての読み書きを api から行う。未設定ならモックストアに
-  戻るので、api なしでも `npm run dev` で動く
-  - サーバーコンポーネントからの読み取りは `src/lib/games.ts`、`clips.ts`、`recruits.ts`、
-    `auth.ts` を通る（`API_URL` の有無でモックと api を切り替える）。リクエストの Cookie
-    （`gca_session`、`gca_viewer`）は api に引き継ぐ
-  - ブラウザからの呼び出し（`/api/...` の Route Handler）は api への転送（`proxyToApi`）になり、
-    本文とレスポンスをストリームのまま流す。ステータスと Set-Cookie も引き継ぐ。
-    動画のアップロードと Range 付きの配信もここを通る。ブラウザは今までどおり web の URL だけを
-    見ていればよい（Cookie も同じオリジンのまま）
-  - `GET /api/me/liked-clip-ids` は web のサーバーコンポーネント専用で、ブラウザ用の転送は無い
-- **残り**: モックストア（`mock-db.ts`、`/api/*` のモック実装、`storage.ts` など）は、
-  `API_URL` 未設定のホスト起動のために残してある。api 前提にするなら、まとめて削除できる
+- **済（web 側）**: モックストア（`mock-db.ts` と `/api/*` のモック実装）を削除した。
+  web の読み書きはすべて api 経由（「現在の構成」参照）
 - **移行の途中で見つけた制限**: Docker VM のメモリが少ない（Rancher Desktop の既定は 2GB）と、
   web のイメージのビルド（`next build`）が `cannot allocate memory` で失敗することがある。
   他のコンテナを止めてからビルドするか、VM のメモリを増やす
@@ -281,31 +321,24 @@ TypeScript 製のバックエンドを `apps/api` に追加する。
 
 - `packages/shared` は TypeScript のソースのまま配布する（ビルドしない）。
   `@gamingclipapp/shared` は型だけ（クライアントコンポーネントからも読むため）、
-  シードは `@gamingclipapp/shared/seed` に分けてあり、web のモックストアと api のシードが共用する
+  シードは `@gamingclipapp/shared/seed` に分けてあり、api のシードだけが使う
 - api は tsup で依存ごと 1 つのバンドルにする。実行イメージに `node_modules` は要らない
 - 返す JSON の形（`{ games }` / `{ game }` / `{ clips }` / `{ clip }` / `{ error }`）は
-  web のモック API と揃えてあるので、`mock-db.ts` を fetch に差し替えるときに形を変えなくて済む
+  モック API だった頃の形を引き継いでいる
 - 並び順はシードの並び（`games.sort_order`）、クリップは新しい順
 
-- 候補: Hono（軽量・Cloudflare Workers 互換）または NestJS（学習コスト高いが本格的）
-- 移行手順:
-  1. `packages/shared` を作り `types.ts` を移動、web / api の両方から参照する
-  2. `apps/api` に同じ REST API を実装（DB は PostgreSQL を想定）
-  3. `apps/web` の `src/lib/mock-db.ts` の関数実装を、`apps/api` への
-     fetch に差し替える（関数シグネチャは維持する）
-  4. `/api/*` Route Handlers は削除するか、apps/api へのプロキシにする
-- 動画ファイルは オブジェクトストレージ（自宅 K8s なら MinIO、
-  Cloudflare なら R2）に保存し、アップロードは署名付き URL 方式にする
-  （`ClipStorage` の実装を追加して差し替える）
-- 認証は本物のセッション管理（または NextAuth / Auth.js）に置き換える
+- バックエンドは Hono（軽量・Cloudflare Workers 互換）に決めた
+- 動画ファイルはオブジェクトストレージ（自宅 K8s なら MinIO、Cloudflare なら R2）に保存し、
+  アップロードは署名付き URL 方式にする（`ClipStorage` の実装を追加して差し替える）
+- 認証は、k8s へ移すときに Cloudflare 経由の Google OAuth に置き換える（デモログインは暫定）
 
 ## インフラの段階的な計画
 
-1. **PoC（現在）**: ローカルで `npm run dev`
+1. **ローカル（現在）**: `docker compose up --build` で web / api / PostgreSQL。ホストで開発するときは `docker compose up -d db api` のうえで `npm run dev`
 2. **自宅 Kubernetes**:
-   - `apps/web/Dockerfile` でイメージをビルドし、レジストリへ push
+   - `apps/web/Dockerfile`、`apps/api/Dockerfile` でイメージをビルドし、レジストリへ push
    - `k8s/` にマニフェストを置く（Deployment / Service / Ingress）
-   - `/api/healthz` を liveness / readiness プローブに使う
+   - web は `/api/healthz`、api は liveness に `/api/healthz`、readiness に `/api/readyz` を使う
    - コンテナは非 root ユーザー（uid 1001）で動作する
    - 設定は環境変数で注入する（`NEXT_PUBLIC_*` はビルド時に埋め込まれる点に注意）
 3. **Cloudflare Workers（検討中）**:
@@ -327,9 +360,9 @@ TypeScript 製のバックエンドを `apps/api` に追加する。
   するため `next/font` は使っていない）。本番では woff2 を `public/fonts` に置いて
   自前配信に切り替える
 
-## 運用上の考慮（モック段階から組み込み済み）
+## 運用上の考慮
 
 - `output: "standalone"` による軽量な本番イメージ
 - マルチステージ Dockerfile、非 root 実行
 - `/api/healthz` ヘルスチェックエンドポイント
-- モノレポ構成（`npm workspaces`）でバックエンド追加に備える
+- モノレポ構成（`npm workspaces`）。`packages/shared` で型を共有する

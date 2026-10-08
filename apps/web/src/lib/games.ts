@@ -1,14 +1,15 @@
-// ゲームの読み取り。API_URL があれば apps/api から、無ければモックストアから読む。
-// 移行中の暫定の層で、モックを外したら mock-db の呼び出しごと不要になる。
+// ゲームの読み取り（apps/api から）
 // このファイルは Node.js の API を使うため、クライアントコンポーネントから import しないこと。
 
 import { apiGet } from "./api";
-import { API_URL } from "./config";
-import * as mock from "./mock-db";
 import type { Game } from "./types";
 
-export async function listGames(filter: mock.GameFilter = {}): Promise<Game[]> {
-  if (!API_URL) return mock.listGames(filter);
+export interface GameFilter {
+  query?: string;
+  genre?: string;
+}
+
+export async function listGames(filter: GameFilter = {}): Promise<Game[]> {
   const params = new URLSearchParams();
   if (filter.query) params.set("q", filter.query);
   if (filter.genre) params.set("genre", filter.genre);
@@ -18,7 +19,6 @@ export async function listGames(filter: mock.GameFilter = {}): Promise<Game[]> {
 }
 
 export async function getGame(slug: string): Promise<Game | undefined> {
-  if (!API_URL) return mock.getGame(slug);
   const { status, body } = await apiGet<{ game: Game }>(`/api/games/${encodeURIComponent(slug)}`);
   return status === 404 ? undefined : body.game;
 }

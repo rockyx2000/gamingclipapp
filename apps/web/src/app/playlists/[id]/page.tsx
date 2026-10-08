@@ -10,15 +10,14 @@ export async function generateMetadata(
   props: PageProps<"/playlists/[id]">,
 ): Promise<Metadata> {
   const { id } = await props.params;
-  const user = await getCurrentUser();
-  return { title: (await getPlaylist(id, user?.id))?.title ?? "プレイリスト" };
+  return { title: (await getPlaylist(id))?.title ?? "プレイリスト" };
 }
 
 // プレイリストの詳細。非公開のものは持ち主以外には 404 にする
 export default async function PlaylistPage(props: PageProps<"/playlists/[id]">) {
   const { id } = await props.params;
   const user = await getCurrentUser();
-  const playlist = await getPlaylist(id, user?.id);
+  const playlist = await getPlaylist(id);
   if (!playlist) notFound();
   return (
     <PlaylistDetail

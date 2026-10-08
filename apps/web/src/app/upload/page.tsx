@@ -120,6 +120,7 @@ export default function UploadPage() {
     title: "",
     description: "",
     gameId: "",
+    tags: [],
   });
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [fileError, setFileError] = useState<string | null>(null);
@@ -335,6 +336,14 @@ export default function UploadPage() {
       form.append("title", details.title);
       form.append("description", details.description);
       form.append("gameId", details.gameId);
+      if (details.tags.length > 0) {
+        form.append(
+          "tags",
+          JSON.stringify(
+            details.tags.map((t) => ({ username: t.user.username, x: t.x, y: t.y })),
+          ),
+        );
+      }
       form.append("durationSec", String(Math.round(exported.lengthSec)));
 
       setPhase({ kind: "uploading", progress: 0 });

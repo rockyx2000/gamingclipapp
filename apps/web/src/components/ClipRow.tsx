@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import type { ClipWithGame } from "@/lib/types";
 import { formatDuration } from "@/lib/format";
 import { colors, displaySx } from "@/theme";
+import { HoverPreview } from "./HoverPreview";
 
 interface Props {
   clip: ClipWithGame;
@@ -65,17 +66,14 @@ export function ClipRow({ clip, rank, query, meta, actions }: Props) {
           textDecoration: "none",
         }}
       >
-        <Box
+        <HoverPreview
+          src={clip.videoUrl}
+          poster={clip.thumbnailUrl}
           sx={{
-            position: "relative",
             width: { xs: 112, sm: 200 },
             flexShrink: 0,
             aspectRatio: "16 / 9",
             borderRadius: 1,
-            bgcolor: "#000",
-            backgroundImage: `url(${clip.thumbnailUrl})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
           }}
         >
           <Box
@@ -94,7 +92,7 @@ export function ClipRow({ clip, rank, query, meta, actions }: Props) {
           >
             {formatDuration(clip.durationSec)}
           </Box>
-        </Box>
+        </HoverPreview>
         <Box sx={{ minWidth: 0, pt: 0.25 }}>
           <Typography
             variant="subtitle2"

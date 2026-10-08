@@ -55,6 +55,8 @@ export interface Clip {
   /** 総いいね数。保存値（シードの初期値）に、ユーザーのいいねを足して返す */
   likes: number;
   createdAt: string;
+  /** 映像の上に付けられたユーザーのタグ（Instagram のように位置つき） */
+  tags?: ClipTag[];
 }
 
 export interface Comment {
@@ -62,6 +64,49 @@ export interface Comment {
   author: User;
   body: string;
   createdAt: string;
+  /** 本文の @ユーザー名 で呼ばれたユーザー（実在するものだけ。api が返す） */
+  mentions?: User[];
+}
+
+/**
+ * クリップの映像に付けたユーザーのタグ。位置は映像のコマに対する割合（0〜1、左上が原点）で、
+ * 画面の大きさや黒帯の有無に関係なく、同じ人の上に出せる。
+ */
+export interface ClipTag {
+  user: User;
+  x: number;
+  y: number;
+}
+
+/** 投稿・更新で送るタグ（ユーザーは ID ではなくユーザー名で指定する） */
+export interface ClipTagInput {
+  username: string;
+  x: number;
+  y: number;
+}
+
+/** ユーザー名の形式。@メンションとタグ付けの検索・解釈に使う */
+export const USERNAME_PATTERN = /^[A-Za-z0-9_]{1,30}$/;
+
+/** 1 つのコメントで呼べるユーザー数の上限 */
+export const MAX_MENTIONS_PER_COMMENT = 10;
+
+/** 1 つのクリップにタグ付けできるユーザー数の上限 */
+export const MAX_CLIP_TAGS = 10;
+
+/** コメントの一覧は、このページ単位で読む */
+export const COMMENTS_PAGE_SIZE = 20;
+
+/** コメントの一覧のレスポンス。nextCursor が null なら最後まで読んだ */
+export interface CommentPage {
+  comments: Comment[];
+  nextCursor: string | null;
+}
+
+/** 検索サジェスト（ヘッダーの検索欄） */
+export interface SearchSuggestions {
+  games: Pick<Game, "id" | "slug" | "name" | "genre">[];
+  clips: { id: string; title: string; gameName: string }[];
 }
 
 export type RecruitStatus = "open" | "closed";

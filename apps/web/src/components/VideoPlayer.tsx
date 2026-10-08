@@ -28,7 +28,9 @@ import VolumeDownIcon from "@mui/icons-material/VolumeDown";
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import { formatDuration } from "@/lib/format";
+import type { ClipTag } from "@/lib/types";
 import { displaySx } from "@/theme";
+import { TagLayer, TagToggle } from "./TagLayer";
 
 interface Props {
   src: string;
@@ -39,6 +41,8 @@ interface Props {
   onPlay?: () => void;
   /** 最後まで再生したときに呼ばれる（プレイリストの次へ進む用） */
   onEnded?: () => void;
+  /** 映像の上に付けられたユーザーのタグ。あれば表示の切り替えボタンが出る */
+  tags?: ClipTag[];
 }
 
 const HIDE_CONTROLS_MS = 2500;
@@ -50,11 +54,15 @@ export function VideoPlayer({
   autoPlay = false,
   onPlay,
   onEnded,
+  tags = [],
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideTimer = useRef<number | null>(null);
 
+  const [showTags, setShowTags] = useState(false);
+  // タグを黒帯を除いた映像の位置に合わせるための縦横比（幅 / 高さ）
+  const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [playing, setPlaying] = useState(false);
   const [ended, setEnded] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -274,9 +282,11 @@ export function VideoPlayer({
         onTimeUpdate={(e: SyntheticEvent<HTMLVideoElement>) => {
           if (!seeking) setCurrentTime(e.currentTarget.currentTime);
         }}
-        onLoadedMetadata={(e: SyntheticEvent<HTMLVideoElement>) =>
-          setDuration(e.currentTarget.duration)
-        }
+        onLoadedMetadata={(e: SyntheticEvent<HTMLVideoElement>) => {
+          setDuration(e.currentTarget.duration);
+          const { videoWidth, videoHeight } = e.currentTarget;
+          if (videoWidth && videoHeight) setAspect(videoWidth / videoHeight);
+        }}
         onProgress={handleProgress}
         onVolumeChange={(e: SyntheticEvent<HTMLVideoElement>) => {
           setVolume(e.currentTarget.volume);
@@ -291,6 +301,23 @@ export function VideoPlayer({
           bgcolor: "#000",
         }}
       />
+
+      {showTags && tags.length > 0 && <TagLayer tags={tags} aspect={aspect} />}
+      {tags.length > 0 && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            zIndex: 3,
+            // コントロールと同じく、再生中は使わないときに隠す。表示中は出しておく
+            opacity: controlsVisible || showTags ? 1 : 0,
+            transition: "opacity 150ms",
+          }}
+        >
+          <TagToggle count={tags.length} shown={showTags} onToggle={() => setShowTags(!showTags)} />
+        </Box>
+      )}
 
       {/* 中央の再生 / リプレイ */}
       {(!playing || ended) && (

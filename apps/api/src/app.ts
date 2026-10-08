@@ -9,7 +9,10 @@ import type { Db } from "./db/client";
 import { getClip, getGame, listClips, listGames } from "./queries";
 import { getPlaylist, listPlaylistsByOwner } from "./playlists";
 import { isRankingPeriod, listRanking, listTrending } from "./ranking";
-import { addRecruit, addRecruitComment, getRecruit, listRecruits } from "./recruits";
+import { addRecruit, addRecruitComment, getRecruit, listRecruitComments, listRecruits } from "./recruits";
+import { decodeCursor, parseLimit } from "./comment-page";
+import { searchUsers, suggest } from "./search";
+import { removeTag, setTags } from "./tags";
 import { MAX_CLIP_COMMENT_LENGTH } from "@gamingclipapp/shared";
 import { MAX_THUMBNAIL_BYTES, MAX_UPLOAD_BYTES, config } from "./config";
 import { HttpError } from "./errors";
@@ -88,11 +91,18 @@ export function createApp(db: Db) {
     return c.json({ clip });
   });
 
-  // GET /api/clips/:id/comments  コメント一覧（新しい順、ログイン不要）
+  // GET /api/clips/:id/comments?limit=&cursor=  コメント一覧（新しい順、ログイン不要）。
+  // { comments, nextCursor }。nextCursor を cursor に渡すと続きが読める（null なら最後）
   app.get("/api/clips/:id/comments", async (c) => {
-    const comments = await listClipComments(db, c.req.param("id"));
-    if (!comments) return c.json({ error: "クリップが見つかりません" }, 404);
-    return c.json({ comments });
+    const cursorParam = c.req.query("cursor");
+    const cursor = cursorParam ? decodeCursor(cursorParam) : undefined;
+    if (cursorParam && !cursor) return c.json({ error: "cursor が不正です" }, 400);
+    const page = await listClipComments(db, c.req.param("id"), {
+      limit: parseLimit(c.req.query("limit")),
+      cursor,
+    });
+    if (!page) return c.json({ error: "クリップが見つかりません" }, 404);
+    return c.json(page);
   });
 
   // GET /api/ranking?period=day|week|month|all&game=<slug>
@@ -143,11 +153,33 @@ export function createApp(db: Db) {
     return c.json({ recruits: await listRecruits(db, c.req.query("game")) });
   });
 
+  // GET /api/recruits/:id/comments?limit=&cursor=  募集のコメント一覧（新しい順）。形はクリップと同じ
+  app.get("/api/recruits/:id/comments", async (c) => {
+    const cursorParam = c.req.query("cursor");
+    const cursor = cursorParam ? decodeCursor(cursorParam) : undefined;
+    if (cursorParam && !cursor) return c.json({ error: "cursor が不正です" }, 400);
+    const page = await listRecruitComments(db, c.req.param("id"), {
+      limit: parseLimit(c.req.query("limit")),
+      cursor,
+    });
+    if (!page) return c.json({ error: "募集が見つかりません" }, 404);
+    return c.json(page);
+  });
+
   // GET /api/recruits/:id
   app.get("/api/recruits/:id", async (c) => {
     const recruit = await getRecruit(db, c.req.param("id"));
     if (!recruit) return c.json({ error: "募集が見つかりません" }, 404);
     return c.json({ recruit });
+  });
+
+  // GET /api/search/suggest?q=  ヘッダーの検索欄の候補（ゲームとクリップ）
+  app.get("/api/search/suggest", async (c) => c.json(await suggest(db, c.req.query("q") ?? "")));
+
+  // GET /api/users/search?q=  ユーザーの検索（@メンション・タグ付けの候補。要ログイン）
+  app.get("/api/users/search", async (c) => {
+    await requireUser(db, c);
+    return c.json({ users: await searchUsers(db, c.req.query("q") ?? "") });
   });
 
   // GET /api/users  デモユーザー一覧（モックログイン用）
@@ -283,6 +315,21 @@ export function createApp(db: Db) {
     if (result === "not_found") return c.json({ error: "コメントが見つかりません" }, 404);
     if (result === "forbidden") return c.json({ error: "このコメントは削除できません" }, 403);
     return c.body(null, 204);
+  });
+
+  // PUT /api/clips/:id/tags  { tags: [{ username, x, y }] } でタグを入れ替える（投稿者だけ）
+  app.put("/api/clips/:id/tags", async (c) => {
+    const user = await requireUser(db, c);
+    const { tags } = await readJsonObject(c);
+    // tags の付け忘れ（や旧形式のキー）で、黙って全タグが消えないようにする
+    if (!Array.isArray(tags)) throw new HttpError("tags に配列を指定してください", 400);
+    return c.json({ tags: await setTags(db, c.req.param("id"), user.id, tags) });
+  });
+
+  // DELETE /api/clips/:id/tags/:userId  タグを外す（投稿者か、タグ付けされた本人）
+  app.delete("/api/clips/:id/tags/:userId", async (c) => {
+    const user = await requireUser(db, c);
+    return c.json({ tags: await removeTag(db, c.req.param("id"), c.req.param("userId"), user.id) });
   });
 
   // POST /api/playlists  作成（要ログイン）{ title, description?, visibility?, clipId? }

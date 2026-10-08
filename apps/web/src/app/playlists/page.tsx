@@ -3,7 +3,7 @@ import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import { getCurrentUser } from "@/lib/auth";
-import { listLikedClips, listPlaylistsByOwner } from "@/lib/clips";
+import { listLikedClips, listMyPlaylists } from "@/lib/clips";
 import { timeAgo } from "@/lib/format";
 import { CreatePlaylistButton } from "@/components/CreatePlaylistButton";
 import { LoginPrompt } from "@/components/LoginPrompt";
@@ -25,8 +25,8 @@ export default async function PlaylistsPage() {
     );
   }
   const [playlists, liked] = await Promise.all([
-    listPlaylistsByOwner(user.id),
-    listLikedClips(user.id),
+    listMyPlaylists(),
+    listLikedClips(),
   ]);
 
   return (

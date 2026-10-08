@@ -9,9 +9,10 @@ import {
   VIDEO_EXTENSIONS,
 } from "./config";
 import type { Db } from "./db/client";
-import { clips, games } from "./db/schema";
+import { clips, clipTags, games } from "./db/schema";
 import { HttpError } from "./errors";
 import { getClip } from "./queries";
+import { resolveTags } from "./tags";
 import { getStorage } from "./storage";
 
 const mb = (bytes: number) => Math.floor(bytes / 1024 / 1024);
@@ -21,6 +22,8 @@ const mb = (bytes: number) => Math.floor(bytes / 1024 / 1024);
  *   video       動画ファイル（必須。mp4 / webm / mov）
  *   thumbnail   サムネイル画像（任意）
  *   title, description, gameId, durationSec
+ *   tags        映像に付けるタグの JSON 配列（任意。例: [{"username":"hanako_fps","x":0.4,"y":0.6}]。
+ *               x, y は映像のコマに対する位置の割合（0〜1）
  * 注意: formData() はファイル全体をメモリに読み込む。Cloudflare R2 へ移すときは、
  * 署名付き URL でブラウザから直接送る方式に切り替える（docs/architecture.md）。
  */
@@ -58,6 +61,18 @@ export async function createClipFromForm(db: Db, form: FormData, uploader: User)
     }
   }
 
+  // 保存より前に検証する（不正なタグでファイルだけ残らないように）
+  let rawTags: unknown;
+  const tagsField = form.get("tags");
+  if (typeof tagsField === "string" && tagsField.trim() !== "") {
+    try {
+      rawTags = JSON.parse(tagsField);
+    } catch {
+      throw new HttpError("タグの指定が不正です", 400);
+    }
+  }
+  const tagged = await resolveTags(db, rawTags, uploader.id);
+
   const storage = getStorage();
   const id = crypto.randomUUID();
   const videoKey = `${id}/video${ext}`;
@@ -71,20 +86,25 @@ export async function createClipFromForm(db: Db, form: FormData, uploader: User)
     } else {
       thumbnailUrl = `https://picsum.photos/seed/${id}/640/360`;
     }
-    await db.insert(clips).values({
-      id,
-      title,
-      description,
-      videoUrl: storage.publicUrl(videoKey),
-      thumbnailUrl,
-      durationSec: duration,
-      mimeType: video.type,
-      sizeBytes: video.size,
-      gameId,
-      uploaderId: uploader.id,
-      views: 0,
-      likes: 0,
-      createdAt: new Date(),
+    await db.transaction(async (tx) => {
+      await tx.insert(clips).values({
+        id,
+        title,
+        description,
+        videoUrl: storage.publicUrl(videoKey),
+        thumbnailUrl,
+        durationSec: duration,
+        mimeType: video.type,
+        sizeBytes: video.size,
+        gameId,
+        uploaderId: uploader.id,
+        views: 0,
+        likes: 0,
+        createdAt: new Date(),
+      });
+      if (tagged.length > 0) {
+        await tx.insert(clipTags).values(tagged.map((t) => ({ clipId: id, ...t })));
+      }
     });
   } catch (err) {
     // 途中で失敗したら保存済みのファイルを残さない

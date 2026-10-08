@@ -13,10 +13,18 @@ interface Props {
   onClose: () => void;
   clipId: string;
   uploaderId: string;
+  initialCount: number;
   onCountChange: (count: number) => void;
 }
 
-export function CommentsSheet({ open, onClose, clipId, uploaderId, onCountChange }: Props) {
+export function CommentsSheet({
+  open,
+  onClose,
+  clipId,
+  uploaderId,
+  initialCount,
+  onCountChange,
+}: Props) {
   return (
     <Drawer
       anchor="bottom"
@@ -42,7 +50,12 @@ export function CommentsSheet({ open, onClose, clipId, uploaderId, onCountChange
           <CloseIcon />
         </IconButton>
         {open && (
-          <ClipComments clipId={clipId} uploaderId={uploaderId} onCountChange={onCountChange} />
+          <ClipComments
+            clipId={clipId}
+            uploaderId={uploaderId}
+            initialCount={initialCount}
+            onCountChange={onCountChange}
+          />
         )}
       </Box>
     </Drawer>

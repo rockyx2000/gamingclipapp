@@ -1,4 +1,4 @@
-// apps/api を呼ぶ共通の層。API_URL があるときだけ使う。
+// apps/api を呼ぶ共通の層。web のデータの読み書きはすべてここを通る。
 // リクエストの Cookie（セッションと匿名の視聴者 ID）を api に引き継ぐので、
 // サーバーコンポーネントと Route Handler のどちらからでも「いまのユーザーとして」呼べる。
 // このファイルは next/headers を使うため、クライアントコンポーネントから import しないこと。
@@ -12,9 +12,8 @@ export const VIEWER_COOKIE = "gca_viewer";
 /** api に引き継ぐ Cookie */
 const FORWARDED_COOKIES = [SESSION_COOKIE, VIEWER_COOKIE];
 
-/** api を呼ぶ。API_URL が無いときに呼ぶのはプログラムの誤りなので例外にする */
+/** api を呼ぶ */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  if (!API_URL) throw new Error("API_URL が設定されていません");
   const headers = new Headers(init.headers);
   const cookieStore = await cookies();
   const cookie = FORWARDED_COOKIES.flatMap((name) => {

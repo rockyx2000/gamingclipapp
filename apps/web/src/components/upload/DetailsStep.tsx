@@ -16,13 +16,16 @@ import Typography from "@mui/material/Typography";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { formatTimecode } from "@/lib/video-edit";
 import { displaySx } from "@/theme";
-import type { Game } from "@/lib/types";
+import type { ClipTag, Game } from "@/lib/types";
 import { gameMenuItems } from "@/components/gameMenuItems";
+import { TagEditor } from "@/components/TagEditor";
 
 export interface ClipDetails {
   title: string;
   description: string;
   gameId: string;
+  /** 映像の上に付けたユーザーのタグ */
+  tags: ClipTag[];
 }
 
 /** サムネイルとして受け付ける画像 */
@@ -87,23 +90,12 @@ export function DetailsStep({
   return (
     <Grid container spacing={3}>
       <Grid size={{ xs: 12, md: 6 }}>
-        <Box sx={{ bgcolor: "#000", borderRadius: 1, p: 1 }}>
-          <Box
-            component="video"
-            src={previewUrl}
-            controls
-            playsInline
-            controlsList="nodownload noremoteplayback"
-            disablePictureInPicture
-            sx={{
-              display: "block",
-              width: "100%",
-              aspectRatio: "16 / 9",
-              objectFit: "contain",
-              bgcolor: "#000",
-            }}
-          />
-        </Box>
+        <TagEditor
+          previewUrl={previewUrl}
+          value={value.tags}
+          onChange={(tags) => onChange({ ...value, tags })}
+          disabled={disabled}
+        />
         <Stack direction="row" spacing={2} sx={{ mt: 1, alignItems: "baseline" }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
             <Typography component="span" sx={{ ...displaySx, fontSize: 20 }}>
