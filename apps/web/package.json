@@ -9,15 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@gamingclipapp/shared": "*",
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@gamingclipapp/shared": "*",
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
     "@mui/material-nextjs": "^9.1.1",
     "mediabunny": "^1.55.7",
-    "next": "16.2.10",
+    "next": "16.4.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -26,7 +26,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.4.0",
     "typescript": "^5"
   }
 }
