@@ -122,7 +122,7 @@ docs/              設計ドキュメント（architecture.md）
 k8s/               Kubernetes マニフェスト予定地
 ```
 
-設計の詳細と今後の移行計画は [docs/architecture.md](docs/architecture.md) を参照。
+設計の詳細と今後の移行計画は [docs/architecture.md](docs/architecture.md)、決めたことと理由は [docs/adr](docs/adr/README.md) を参照。
 
 ## デモユーザー
 
