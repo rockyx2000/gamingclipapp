@@ -11,6 +11,7 @@ YouTube のゲームクリップ版を目指す Web アプリケーション。
 - ゲームカテゴリ検索（26 タイトル、ジャンルで絞り込み）と、ヘッダーの検索サジェスト
 - サムネイルにマウスを乗せると、動画の最初の 5 秒を再生
 - 映像の上にユーザーをタグ付け（Instagram のように、位置を指定して付ける）
+- 投稿後の編集（タイトル・説明・ゲーム・サムネイル・タグ）と削除
 - ゲームごとのチームメンバー募集掲示板
 - ログインなしでも閲覧可能（投稿にはログインが必要）
 
@@ -114,6 +115,7 @@ apps/web/          Next.js フロントエンド
 apps/api/          Hono + Drizzle + PostgreSQL のバックエンド
   src/db/          スキーマ・マイグレーション実行・シード
   drizzle/         生成されたマイグレーション SQL
+  seed-media/      シードのクリップの動画（開発用に生成した短い MP4）
 packages/shared/   web と api で共有するドメイン型（シードデータは api が使う）
 docker-compose.yml web / api / PostgreSQL をまとめて起動する
 docs/              設計ドキュメント（architecture.md）

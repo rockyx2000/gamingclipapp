@@ -28,6 +28,7 @@ import { EditStep } from "@/components/upload/EditStep";
 import {
   DetailsStep,
   THUMBNAIL_TYPES,
+  MAX_THUMBNAIL_BYTES,
   type ClipDetails,
   type ThumbnailKind,
 } from "@/components/upload/DetailsStep";
@@ -47,7 +48,6 @@ const ACCEPTED_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 const STEPS = ["動画を選ぶ", "編集する", "投稿する"];
 
 /** アップロードできるサムネイル画像の上限（サーバー側の MAX_THUMBNAIL_MB と合わせる） */
-const MAX_THUMBNAIL_BYTES = 10 * 1024 * 1024;
 
 type Phase =
   | { kind: "idle" }
