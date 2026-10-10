@@ -1,5 +1,7 @@
 # アーキテクチャ設計
 
+決めたことと理由は [ADR](adr/README.md) にまとめている。
+
 ## 概要
 
 GameClips は YouTube のゲームクリップ版を目指す Web アプリケーション。
